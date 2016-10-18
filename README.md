@@ -1,11 +1,9 @@
 # QualityControl
 Quality control for TQS data
 
-This code performs a quality-control check on output from [Skyline] ( https://skyline.gs.washington.edu/labkey/project/home/software/Skyline/begin.view) .  You will also need "Master list" that notes which transition should be used for quantification.  The output is a .csv of sample ID, compound ID, any flags and vetted area.
+This code performs a quality-control check on output from [Skyline] ( https://skyline.gs.washington.edu/labkey/project/home/software/Skyline/begin.view) .  You will also need "Master list" that notes which transition should be used for quantification.  
 
 Please cite the following paper when using this code:
-
-
 
 # Software
 This code is written in R .
