@@ -344,7 +344,7 @@ comment.text <- paste("# Hello! welcome to your data! ","Overload height: ",
                       "S/N threshold: " , SN.thresh, ". ",
                       "Minimum peak height: ", min.height, ". ",
                       "Processed on: ", Sys.time(), sep="")
-new.filename <- paste("test2_QC_output",filename,sep="")
+new.filename <- paste("QC_output",filename,sep="")
 con <- file(new.filename, open="wt")
 writeLines(paste(comment.text), con)
 write.csv(final.output, con)
