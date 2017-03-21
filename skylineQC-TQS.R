@@ -159,10 +159,13 @@ for(i in 1:nrow(output)){
 
 ## Add areas, heights, and Ion Ratios to output ----------------------
 Area <- c()
+Area.BlkSub <- c()
 Pk.Height <- c()
 IR <- c()
-blank.data <- c()
+BlkRatio <- c()
 S.N <- c()
+blank.data <- c()
+std.data <- c()
 i=1
 for (i in 1:length(cmpds)){
      ## find the right trace for that compound
@@ -171,25 +174,6 @@ for (i in 1:length(cmpds)){
      key <- as.character(cmpds[i])
      ssets <- split(cmpd.samp.dfs[[key]],cmpd.samp.dfs[[key]]$Product.Mz)
      areas.quant <- ssets[[as.character(q.trace)]]
-     if (length(grep(pattern = "yes",mset$X2nd.trace))>0){
-          sec.trace <- mset$Daughter[mset$X2nd.trace=="yes"]
-          areas.sec <- ssets[[as.character(sec.trace)]]
-          key.info <- merge(areas.quant, areas.sec, 
-                       by = c("Precursor.Ion.Name","Replicate.Name",
-                              "Precursor.Mz","sample.type"),
-                       all = TRUE)
-          key.IR <- key.info$Area.x/key.info$Area.y
-     } else {
-          key.IR <- rep(NA,length(areas.quant$Area))
-     }
-     # print(paste(cmpds[i],nrow(areas.quant)))
-     Area <- c(Area, areas.quant$Area[order(areas.quant$Replicate.Name)])
-     
-     Pk.Height <- c(Pk.Height, areas.quant$Height[order(areas.quant$Replicate.Name)])
-     IR <- c(IR, key.IR)
-     S.N <- c(S.N, (areas.quant$Area[order(areas.quant$Replicate.Name)]+
-                         areas.quant$Background[order(areas.quant$Replicate.Name)])/
-                   areas.quant$Background[order(areas.quant$Replicate.Name)])
      ## Use the q.trace to get the blank data we should use
      bsets <- split(cmpd.blk.list[[key]],cmpd.blk.list[[key]]$Product.Mz)
      ## Find the blank with the highest peak area
@@ -198,12 +182,42 @@ for (i in 1:length(cmpds)){
      ## it at the end of the output later on
      blank.data <- rbind(blank.data, 
                          bsets[[as.character(q.trace)]][which(bsets[[as.character(q.trace)]]$Area==blk.max),])
-
+     ## Save out the standard info for this run and this transition so we can put
+     ## it at the end of the output later on
+     std.sets <- split(cmpd.std.list[[key]],cmpd.std.list[[key]]$Product.Mz)
+     std.data <- rbind(std.data,
+                       std.sets[[as.character(q.trace)]])
+     ## get the sample data
+     if (length(grep(pattern = "yes",mset$X2nd.trace))>0){
+          sec.trace <- mset$Daughter[mset$X2nd.trace=="yes"]
+          areas.sec <- ssets[[as.character(sec.trace)]]
+          key.info <- merge(areas.quant, areas.sec, 
+                            by = c("Precursor.Ion.Name","Replicate.Name",
+                                   "Precursor.Mz","sample.type"),
+                            all = TRUE)
+          key.IR <- key.info$Area.x/key.info$Area.y
+     } else {
+          key.IR <- rep(NA,length(areas.quant$Area))
+     }
+     print(paste(cmpds[i],nrow(areas.quant)))
+     Area.temp <- areas.quant$Area[order(areas.quant$Replicate.Name)]
+     Area <- c(Area, Area.temp)
+     BlkSub.temp <- Area.temp - blk.max
+     Area.BlkSub <- c(Area.BlkSub, BlkSub.temp)
+     BlkRatio.temp <- blk.max/Area.temp
+     BlkRatio <- c(BlkRatio, BlkRatio.temp)
+     Pk.Height <- c(Pk.Height, areas.quant$Height[order(areas.quant$Replicate.Name)])
+     IR <- c(IR, key.IR)
+     S.N <- c(S.N, (areas.quant$Area[order(areas.quant$Replicate.Name)]+
+                         areas.quant$Background[order(areas.quant$Replicate.Name)])/
+                   areas.quant$Background[order(areas.quant$Replicate.Name)])
 }
 output$Area <- Area
+output$Area.BlkSub <- Area.BlkSub
 output$Height <- Pk.Height
 output$IR <- IR
 output$S.N <- S.N
+output$BlkRatio <- BlkRatio
 
 ## Add a column for the unmodified area - we won't touch this during QC
 output$rawArea <- output$Area
@@ -299,6 +313,16 @@ for (i in 1:nrow(output)){
      }
 }
 
+## attach standard data to output --------------
+std.data$Compound.Name <- std.data$Precursor.Ion.Name
+std.data$Notes <- "Standards"
+std.data$IR <- NA
+std.data$S.N <- (std.data$Area+std.data$Background)/std.data$Background
+std.data$rawArea <- std.data$Area
+std.data$Area.BlkSub <- NA
+std.data$BlkRatio <- NA
+
+output2 <- rbind(output, std.data[,colnames(output)])
 
 ## attach blank data to output ---------------------------
 blank.data$Compound.Name <- blank.data$Precursor.Ion.Name
@@ -306,19 +330,21 @@ blank.data$Notes <- rep("Blank used for comparison",nrow(blank.data))
 blank.data$IR <- rep(NA,nrow(blank.data))
 blank.data$S.N <- (blank.data$Area+blank.data$Background)/blank.data$Background
 blank.data$rawArea <- blank.data$Area
+blank.data$Area.BlkSub <- rep(NA,nrow(blank.data))
+blank.data$BlkRatio <- rep(NA,nrow(blank.data))
 
-final.output <- rbind(output, blank.data[,colnames(output)])
+final.output <- rbind(output2, blank.data[,colnames(output2)])
 
 ## Output with: comment -------------------------
 ## Ion name, area, was a peak removed?
-comment.text <- paste("# Hello! welcome to your data! ","Overload height: ", 
+comment.text <- paste("# Hello! welcome to your data! ","Overload height: ",
                       max.height, ". ", "RT flexibility: ", RT.flex, ". ",
                       "Ion ratio flexibility: ", IR.flex, ". ",
-                      "Blank can be this fraction of a sample: ",blk.thresh, ". ", 
+                      "Blank can be this fraction of a sample: ",blk.thresh, ". ",
                       "S/N threshold: " , SN.thresh, ". ",
                       "Minimum peak height: ", min.height, ". ",
                       "Processed on: ", Sys.time(), sep="")
-new.filename <- paste("QC_output",filename,sep="")
+new.filename <- paste("test2_QC_output",filename,sep="")
 con <- file(new.filename, open="wt")
 writeLines(paste(comment.text), con)
 write.csv(final.output, con)
