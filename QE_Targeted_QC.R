@@ -48,18 +48,18 @@ TransformVariables <- function(skyline.output) {
   before <- lapply(skyline.output, class)
   print("Original class variables ", quote = FALSE)
   print(paste(colnames(skyline.output), ":", before))
-
+  
   skyline.output <- skyline.output %>%
     mutate(Retention.Time = as.numeric(as.character(Retention.Time))) %>%
     mutate(Area           = as.numeric(as.character(Area))) %>%
     mutate(Background     = as.numeric(as.character(Background))) %>%
     mutate(Mass.Error.PPM = as.numeric(as.character(Mass.Error.PPM))) %>%
     rename(Mass.Feature   = Precursor.Ion.Name)
-
+  
   after <- lapply(skyline.output, class)
   print("New class variables ", quote = FALSE)
   print(paste(colnames(skyline.output), ":", after))
-
+  
   return(skyline.output)
 }
 
@@ -83,7 +83,7 @@ CreateFirstFlags <- function(skyline.output, area.min, SN.min, ppm.flex) {
     mutate(SN.Flag       = ifelse(((Area / Background) < SN.min), "SN.Flag", NA)) %>%
     mutate(ppm.Flag      = ifelse((Mass.Error.PPM > ppm.flex), "ppm.Flag", NA)) %>%
     mutate(area.min.Flag = ifelse((Area < area.min), "area.min.Flag", NA))
-
+  
   return(first.flags)
 }
 CreateRTFlags <- function(skyline.output, std.tags) {
@@ -197,6 +197,8 @@ last.join <- second.join %>%
 
 
 # Print to file with comments and new name!`    `
+
+con <- file(paste("QEQC_", input.file), open = "wt")
 writeLines(paste("Hello! Welcome to the world of QE Quality Control! ",
                  "Minimum area for a real peak: ", area.min, ". ",
                  "RT flexibility: ", RT.flex, ". ",
