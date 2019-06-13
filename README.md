@@ -1,7 +1,20 @@
 # QualityControl
-Quality control for TQS data
 
-This code performs a quality-control check on output from [Skyline] ( https://skyline.gs.washington.edu/labkey/project/home/software/Skyline/begin.view) .  You will also need "Master list" that notes which transition should be used for quantification.  
+This code performs a quality-control check on output from [Skyline](https://skyline.gs.washington.edu/labkey/project/home/software/Skyline/begin.view). 
+
+The repository is split into two sections: quality control for a Thermo Q Exactive HF (Orbitrap) and a Waters Xevo TQ-S (triple quadrupole) mass spectrometer.
+
+**Quality control for QE data**
+This code requires the use ofthe command line. An example of how to use it is below:
+'''R
+$ Rscript QE_Targeted_QC.R <filepath of Skyline output file> <filepath of blank matcher file>
+'''
+
+You will then be guided through the necessary steps to set parameters for the quality control.
+
+**Quality control for TQS data**
+
+You will also need a "Master list" that notes which transition should be used for quantification.  
 
 Please cite the following paper when using this code:
 
@@ -15,7 +28,7 @@ Run the samples should be run in the following manner for the quality control an
 * Samples, labeled: Date_Smp_AdditionalID_Rep (e.g. 161018_Std_FirstSample_BioRep1)
 
 # Software
-This code is written in R .
+Both the QE and the TQS code is written in R. The QE quality control code requires the use of the command line. 
 
 It requires the following packages available on CRAN: 
 * plyr
