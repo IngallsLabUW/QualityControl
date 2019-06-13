@@ -46,7 +46,7 @@ TransformVariables <- function(skyline.output) {
   #   to the clearer Mass.Feature.
   #
   before <- lapply(skyline.output, class)
-  print("Original class variables ", quote = FALSE)
+  cat("Original class variables ", "\n", quote = FALSE)
   print(paste(colnames(skyline.output), ":", before))
   
   skyline.output <- skyline.output %>%
@@ -57,10 +57,27 @@ TransformVariables <- function(skyline.output) {
     rename(Mass.Feature   = Precursor.Ion.Name)
   
   after <- lapply(skyline.output, class)
-  print("New class variables ", quote = FALSE)
+  cat("New class variables ", "\n", quote = FALSE)
   print(paste(colnames(skyline.output), ":", after))
   
   return(skyline.output)
+}
+IdentifyRuntypes <- function(machine.output) {
+  # Identify run types and return each unique value present in the Skyline output.
+  # 
+  # Args
+  #   machine.output: Raw output file from Skyline.
+  #
+  # Returns
+  #   run.type: list of labels identifying the run types, isolated from Replicate.Name.
+  #   Options consist of samples (smp), pooled (poo), standards (std) and blanks (blk).
+  #
+  run.type <- tolower(str_extract(machine.output$Replicate.Name, "(?<=_)[^_]+(?=_)"))
+  unique.types <- toString(unique(run.type))
+  cat("The replicate types in this run are:", quote = FALSE, "\n")
+  print(toString(unique(run.type)))
+  
+  return(run.type)
 }
 
 CreateFirstFlags <- function(skyline.output, area.min, SN.min, ppm.flex) {
@@ -140,6 +157,7 @@ skyline.output <- read.csv(file = args[1], header = TRUE)
 blank.matcher  <- read.csv(file = args[2], header = TRUE)
 input.file     <- basename(args[1])
 
+
 # Set parameters for quality control processing.
 cat("Pick the minimum height to be counted as a 'real' peak (QE suggestion: HILIC - 1000, Cyano - 5000): " )
 area.min        <- as.double(readLines("stdin", n = 1))
@@ -170,6 +188,7 @@ PromptToContinue()
 skyline.columns.dropped <- skyline.output %>%
   select(-Protein.Name, -Protein) 
 skyline.classes.transformed <- TransformVariables(skyline.columns.dropped)
+skyline.runtypes.identified <- IdentifyRuntypes(skyline.output)
 
 # Create datasets for different flag types.
 SNPPMAM.flags <- CreateFirstFlags(skyline.classes.transformed, area.min, SN.min, ppm.flex)
@@ -195,6 +214,14 @@ last.join <- second.join %>%
   mutate(all.Flags      = as.character(all.Flags %>% str_remove_all("NA, ") %>%  str_remove_all("NA"))) %>%
   mutate(Area.with.QC   = ifelse(str_detect(all.Flags, "Flag"), NA, Area)) 
 
+# If there are standards, add those to the bottom of the dataset without any flags. 
+if ("std" %in% skyline.runtypes.identified) {
+  print("There are standards in this run. Joining standard samples to the bottom of the dataset.", quote = FALSE)
+  standards <- skyline.classes.transformed[grep("Std", skyline.classes.transformed$Replicate.Name), ]
+  last.join <- rbind(last.join, standards)
+} else {
+  print("No standards exist in this set.", quote = FALSE)
+}
 
 # Print to file with comments and new name!`    `
 
@@ -205,9 +232,9 @@ writeLines(paste("Hello! Welcome to the world of QE Quality Control! ",
                  "Blank can be this fraction of a sample: ", blank.ratio.max, ". ",
                  "S/N ratio: " , SN.min, ". ",
                  "Parts per million flexibility: ", ppm.flex, ". ",
-                 "Sample tag matches:", printed.tags
-                 , ". ",
+                 "Sample tag matches:", printed.tags, ". ",
                  "Processed on: ", Sys.time(), ". ",
                  sep = ""), con)
 write.csv(last.join, con, row.names = FALSE)
 close(con)
+
