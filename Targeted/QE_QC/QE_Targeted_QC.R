@@ -46,18 +46,19 @@ TransformVariables <- function(skyline.output) {
   #   to the clearer Mass.Feature.
   #
   before <- lapply(skyline.output, class)
-  cat("Original class variables ", "\n", quote = FALSE)
+  cat("Original class variables ", "\n")
   print(paste(colnames(skyline.output), ":", before))
   
   skyline.output <- skyline.output %>%
-    mutate(Retention.Time = as.numeric(as.character(Retention.Time))) %>%
-    mutate(Area           = as.numeric(as.character(Area))) %>%
-    mutate(Background     = as.numeric(as.character(Background))) %>%
-    mutate(Mass.Error.PPM = as.numeric(as.character(Mass.Error.PPM))) %>%
-    rename(Mass.Feature   = Precursor.Ion.Name)
+    mutate(Area           = suppressWarnings(as.numeric(as.character(Area)))) %>%
+    mutate(Background     = suppressWarnings(as.numeric(as.character(Background)))) %>%
+    mutate(Mass.Error.PPM = suppressWarnings(as.numeric(as.character(Mass.Error.PPM)))) %>%
+    mutate(Height         = suppressWarnings(as.numeric(as.character(Height)))) %>%
+    rename(Mass.Feature   = Precursor.Ion.Name) %>%
+    mutate(Mass.Feature   = suppressWarnings(as.numeric(as.character(Mass.Feature))))
   
   after <- lapply(skyline.output, class)
-  cat("New class variables ", "\n", quote = FALSE)
+  cat("New class variables ", "\n")
   print(paste(colnames(skyline.output), ":", after))
   
   return(skyline.output)
@@ -74,7 +75,7 @@ IdentifyRuntypes <- function(machine.output) {
   #
   run.type <- tolower(str_extract(machine.output$Replicate.Name, "(?<=_)[^_]+(?=_)"))
   unique.types <- toString(unique(run.type))
-  cat("The replicate types in this run are:", quote = FALSE, "\n")
+  cat("The replicate types in this run are:", "\n")
   print(toString(unique(run.type)))
   
   return(run.type)
@@ -223,7 +224,7 @@ if ("std" %in% skyline.runtypes.identified) {
   print("No standards exist in this set.", quote = FALSE)
 }
 
-# Print to file with comments and new name!`    `
+# Print to file with comments and new name!
 
 con <- file(paste("QEQC_", input.file), open = "wt")
 writeLines(paste("Hello! Welcome to the world of QE Quality Control! ",
