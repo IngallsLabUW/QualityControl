@@ -62,6 +62,21 @@ TransformVariables <- function(skyline.output) {
   
   return(skyline.output)
 }
+IdentifyRunTypes <- function(skyline.output) {
+  # Identify run types and return each unique value present in the SKyline output.
+  #
+  # Args
+  #   skyline.output: Raw output file from Skyline.
+  #
+  # Returns
+  #   run.type: list of labels identifying the run types, isolated from Replicate.Name.
+  #   Options conssist of samples (smp), pooled (poo), standards (std), and blanks (blk).
+  #
+  run.type <- tolower(str_extract(skyline.output$Replicate.Name, "(?<=_)[^_]+(?=_)"))
+  unique.types <- toString(unique(run.type))
+  cat("The replicate types in this run are:", "\n")
+  print(toString(unique(run.type)))
+} 
 
 CreateFirstFlags <- function(skyline.output, area.min, SN.min, ppm.flex) {
   # Creates a dataset containing signal to noise (SN), Parts per million (ppm), 
@@ -170,6 +185,7 @@ PromptToContinue()
 skyline.columns.dropped <- skyline.output %>%
   select(-Protein.Name, -Protein) 
 skyline.classes.transformed <- TransformVariables(skyline.columns.dropped)
+skyline.runtypes.identified <- IdentifyRunTypes(skyline.output)
 
 # Create datasets for different flag types.
 SNPPMAM.flags <- CreateFirstFlags(skyline.classes.transformed, area.min, SN.min, ppm.flex)
@@ -195,6 +211,14 @@ last.join <- second.join %>%
   mutate(all.Flags      = as.character(all.Flags %>% str_remove_all("NA, ") %>%  str_remove_all("NA"))) %>%
   mutate(Area.with.QC   = ifelse(str_detect(all.Flags, "Flag"), NA, Area)) 
 
+# If there are any standards, add those to the bottom of the dataset.
+if ("std" %in% skyline.runtypes.identified) {
+  print("There are standards in this run. Joining standard samples to the bottom of the dataset.", quote = FALSE)
+  standards <- skyline.classes.transformed[grep("Std", skyline.classes.transformed$Replicate.Name), ]
+  last.join <- ribind(last.join, standards)
+} else {
+  print("No standards exist in this set.", quote = FALSE)
+}
 
 # Print to file with comments and new name!`    `
 con <- file(paste("QEQC_", input.file), open = "wt")
