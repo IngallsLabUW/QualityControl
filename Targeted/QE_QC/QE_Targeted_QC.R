@@ -46,18 +46,18 @@ TransformVariables <- function(skyline.output) {
   #   to the clearer Mass.Feature.
   #
   before <- lapply(skyline.output, class)
-  print("Original class variables ", quote = FALSE)
+  cat("Original class variables ", "\n")
   print(paste(colnames(skyline.output), ":", before))
   
   skyline.output <- skyline.output %>%
-    mutate(Retention.Time = as.numeric(as.character(Retention.Time))) %>%
-    mutate(Area           = as.numeric(as.character(Area))) %>%
-    mutate(Background     = as.numeric(as.character(Background))) %>%
-    mutate(Mass.Error.PPM = as.numeric(as.character(Mass.Error.PPM))) %>%
+    mutate(Retention.Time = suppressWarnings(as.numeric(as.character(Retention.Time)))) %>%
+    mutate(Area           = suppressWarnings(as.numeric(as.character(Area)))) %>%
+    mutate(Background     = suppressWarnings(as.numeric(as.character(Background)))) %>%
+    mutate(Mass.Error.PPM = suppressWarnings(as.numeric(as.character(Mass.Error.PPM)))) %>%
     rename(Mass.Feature   = Precursor.Ion.Name)
   
   after <- lapply(skyline.output, class)
-  print("New class variables ", quote = FALSE)
+  cat("New class variables ", "\n")
   print(paste(colnames(skyline.output), ":", after))
   
   return(skyline.output)
