@@ -1,12 +1,12 @@
+library(plyr)
 library(rlist)
 library(tidyverse)
 
-# This script is intended to be used for .csv files output from Skyline (https://skyline.ms/project/home/begin.view?).
-# Run using the command line. When in the proper directory, enter Rscript <this script> <skyline output csv> <blank sample matching csv>
-# The script will then guide you through the steps to obtaining your results, filtered for quality control!
+# This script is intended to be used for .csv files output from Skyline (https://skyline.ms/project/home/begin.view?), and an accompanying
+# csv that matches the samples of your run to their appropriate blanks. See included file in Github repository for reference.
 
-# TODO (kheal): Anything to add in the general description?
-# TODO (kheal): Feel free to look through the function documentation and edit as you see necessary.
+# Run this script using the command line. When in the proper directory, enter Rscript <this script> <skyline output csv> <blank sample matching csv>
+# The script will then guide you through the steps to obtaining your results, filtered for quality control!
 
 PromptToContinue <- function() {
   # Asks the user if they are ready to continue to the next step. 
@@ -25,7 +25,7 @@ PromptForStdTags <- function() {
   # These tags are used to find standards for the creation of reliable retention times.
   std.tags <- list()
   repeat {
-    cat("Sample tag (enter blank if finished): ")
+    cat("Sample tag for reliable retention time (leave blank if finished): ")
     tag <- readLines("stdin", n = 1);
     if (tag == "") {
       return(std.tags)
@@ -63,7 +63,7 @@ TransformVariables <- function(skyline.output) {
   return(skyline.output)
 }
 IdentifyRunTypes <- function(skyline.output) {
-  # Identify run types and return each unique value present in the SKyline output.
+  # Identify run types and return each unique value present in the Skyline output.
   #
   # Args
   #   skyline.output: Raw output file from Skyline.
@@ -73,7 +73,6 @@ IdentifyRunTypes <- function(skyline.output) {
   #   Options conssist of samples (smp), pooled (poo), standards (std), and blanks (blk).
   #
   run.type <- tolower(str_extract(skyline.output$Replicate.Name, "(?<=_)[^_]+(?=_)"))
-  unique.types <- toString(unique(run.type))
   cat("The replicate types in this run are:", "\n")
   print(toString(unique(run.type)))
 } 
@@ -212,16 +211,18 @@ last.join <- second.join %>%
   mutate(Area.with.QC   = ifelse(str_detect(all.Flags, "Flag"), NA, Area)) 
 
 # If there are any standards, add those to the bottom of the dataset.
-if ("std" %in% skyline.runtypes.identified) {
-  print("There are standards in this run. Joining standard samples to the bottom of the dataset.", quote = FALSE)
+Stds.test <- grepl("_Std_", skyline.output$Replicate.Name)
+
+if (any(stdstest = TRUE)) {
+  print("There are standards in this run. Joining standard samples to the bottom of the dataset.!", quote = FALSE)
   standards <- skyline.classes.transformed[grep("Std", skyline.classes.transformed$Replicate.Name), ]
-  last.join <- ribind(last.join, standards)
-} else {
-  print("No standards exist in this set.", quote = FALSE)
+  last.join <- rbind.fill(last.join, standards)
+  } else {
+  print("No standards exist in this set.")
 }
 
 # Print to file with comments and new name!`    `
-con <- file(paste("QEQC_", input.file), open = "wt")
+con <- file(paste("QEQC_", input.file, sep = ""), open = "wt")
 writeLines(paste("Hello! Welcome to the world of QE Quality Control! ",
                  "Minimum area for a real peak: ", area.min, ". ",
                  "RT flexibility: ", RT.flex, ". ",
