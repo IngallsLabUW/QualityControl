@@ -19,6 +19,10 @@ Samples should be run in the following manner for the quality control and [B-MIS
 * A pooled sample run at least three times throughout the run. Example label:161018_Poo_PooledSample_1
 * Samples. Example label: Date_Smp_AdditionalID_Rep
 
+*This repository is still a work in progress! Thanks for your patience.*
+
+## Targeted Data Quality Control
+
 #### Required Input Files
 
 QE | TQS
@@ -28,11 +32,8 @@ CSV pairing blank replicates with their appropriate samples | *in progress*
 
 For an example of the blank/samples csv file, please see Targeted/QE_QC/datafiles/Samps_With_Blanks.csv.
 
-*This repository is still a work in progress! Thanks for your patience.*
 
 ***
-
-## Targeted Data Quality Control
 
 ### Q Exactive HF
 
