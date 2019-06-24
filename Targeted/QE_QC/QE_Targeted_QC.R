@@ -213,8 +213,8 @@ last.join <- second.join %>%
 # If there are any standards, add those to the bottom of the dataset.
 Stds.test <- grepl("_Std_", skyline.output$Replicate.Name)
 
-if (any(stdstest = TRUE)) {
-  print("There are standards in this run. Joining standard samples to the bottom of the dataset.!", quote = FALSE)
+if (any(Stds.test == TRUE)) {
+  print("There are standards in this run. Joining standard samples to the bottom of the dataset!", quote = FALSE)
   standards <- skyline.classes.transformed[grep("Std", skyline.classes.transformed$Replicate.Name), ]
   last.join <- rbind.fill(last.join, standards)
   } else {
