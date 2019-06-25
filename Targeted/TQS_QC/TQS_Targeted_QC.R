@@ -34,8 +34,8 @@ TransformVariables <- function(skyline.output) {
           mutate(Replicate.Name     = suppressWarnings(as.character(Replicate.Name))) %>%
           mutate(Precursor.Ion.Name = suppressWarnings(as.factor(Precursor.Ion.Name))) %>%
           mutate(Area               = suppressWarnings(as.numeric(as.character(Area)))) %>%
-          mutate(Retention.Time     = suppressWarnings(as.numeric(Retention.Time))) %>%
-          mutate(Background         = suppressWarnings(as.numeric(Background))) %>%
+          mutate(Retention.Time     = suppressWarnings(as.numeric(as.character(Retention.Time)))) %>%
+          mutate(Background         = suppressWarnings(as.numeric(as.character(Background)))) %>%
           mutate(Height             = suppressWarnings(as.numeric(as.character(Height)))) %>%
           mutate(Sample.Type        = suppressWarnings(as.factor(run.type)))
      
@@ -49,16 +49,17 @@ areas.transformed <- TransformVariables(areas.raw)
 
 
 # Retention Time  ----------------------------------------------------
+
 RT.Range.Table <- areas.transformed %>%
-     select(Precursor.Ion.Name, Retention.Time, Sample.Type)  %>%
-     group_by(Sample.Type) %>%
-     filter(Sample.Type == "std") %>%
-     group_by(Precursor.Ion.Name) %>%
-     summarize(
-          RT.Reference = mean((Retention.Time), na.rm = TRUE),
-          RT.min = min(Retention.Time),
-          RT.max = max(Retention.Time)
-          ) 
+        select(Precursor.Ion.Name, Retention.Time, Sample.Type) %>%
+        group_by(Sample.Type) %>%
+        filter(Sample.Type == "std") %>%
+        group_by(Precursor.Ion.Name) %>%
+        mutate(RT.Reference = mean(Retention.Time)) %>%
+        mutate(RT.min = min(Retention.Time)) %>%
+        mutate(RT.max = max(Retention.Time)) %>%
+        mutate(RT.Flag = ifelse((abs(Retention.Time - RT.Reference) > RT.flex), "RT.Flag", NA)) 
+
 
 ## Height  ---------------------------------------
 Height.Table <- areas.transformed %>%
@@ -99,6 +100,9 @@ for (i in 1:length(compounds)) {
 
 
 #CheckFragments function here
+
+
+
 
 
 ##########################################
@@ -143,13 +147,6 @@ for(i in 1:length(cmpds)){
 colnames(IR.range) <- cmpds
 ###########################################
 
-###########################################
-# TODO (rlionheart): This is leftover from OG tqs QC
-
-areas.split<-split(areas.raw, areas.raw$Sample.Type)
-
-
-##########################################
 
 
 
