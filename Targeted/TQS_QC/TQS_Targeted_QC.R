@@ -7,6 +7,7 @@ library(tidyverse)
 
 # Import files
 # TODO (rlionheart): Decide on best import practice. Upload csv via shiny app (https://shiny.rstudio.com/gallery/file-upload.html)?
+# TODO (rlionheart): Maybe rename the X2nd trace column for clarity.
 areas.raw <- read.csv("./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv", header = TRUE)
 master <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Example.csv")
 
@@ -47,20 +48,30 @@ TransformVariables <- function(skyline.output) {
 }
 areas.transformed <- TransformVariables(areas.raw)
 
-
-# Retention Time  ----------------------------------------------------
-
+## Retention Time  ----------------------------------------------------
+# TODO (rlionheart): Is the filtering of the "std" imperative? does it affect the Blank and RT reference??
 RT.Range.Table <- areas.transformed %>%
         select(Precursor.Ion.Name, Retention.Time, Sample.Type) %>%
-        group_by(Sample.Type) %>%
-        filter(Sample.Type == "std") %>%
+        #group_by(Sample.Type) %>%
+        #filter(Sample.Type == "std") %>%
         group_by(Precursor.Ion.Name) %>%
         mutate(RT.Reference = mean(Retention.Time)) %>%
         mutate(RT.min = min(Retention.Time)) %>%
         mutate(RT.max = max(Retention.Time)) %>%
         mutate(RT.Flag = ifelse((abs(Retention.Time - RT.Reference) > RT.flex), "RT.Flag", NA)) 
 
+RT.Range.Table <- as.data.frame(RT.Range.Table)
 
+## Blanks ---------------------------------------
+Blank.Table <- areas.transformed %>%
+        select(Precursor.Ion.Name, Area, Sample.Type) %>%
+        group_by(Sample.Type) %>%
+        # filter(Sample.Type == "blk") %>%
+        group_by(Precursor.Ion.Name) %>%
+        mutate(Blank.Reference = mean(Area, na.rm = TRUE)) %>%
+        mutate(blank.Flag = ifelse((Area / Blank.Reference) < blk.thresh, "blank.Flag", NA))
+
+        
 ## Height  ---------------------------------------
 Height.Table <- areas.transformed %>%
      select(Precursor.Ion.Name, Height) %>%
@@ -79,33 +90,49 @@ SN.Table <- areas.transformed %>%
      mutate(SN.Flag = ifelse(((Area / Background) < SN.min), "SN.Flag", NA)) 
 
 
-# Ion Ratio Ranges Table  ----------------------------------------------------
-# for each PIN, check if there is more than one fragment. If yes, determine which is quant and which is sec trace.
 
-compound.list <- areas.raw %>%
-     select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type) %>%
-     group_by(Precursor.Ion.Name) %>%
-     filter(Sample.Type == "std") 
+first.joins <- areas.transformed %>%
+        select(Replicate.Name:Background, Height) %>%
+        left_join(Height.Table) %>%
+        left_join(Area.Table) %>%
+        left_join(SN.Table)
 
-compounds <- as.character(unique(compound.list$Precursor.Ion.Name))
-fragments <- unique(compound.list$Product.Mz)
+# TODO (rlionheart): This is currently not working. Why?
+last.join <- first.joins %>%
+        mutate(all.Flags      = paste(overloaded.Flag, area.min.Flag, SN.Flag, sep = ", ")) %>%
+        mutate(all.Flags      = as.character(all.Flags %>% str_remove_all("NA, ") %>%  str_remove_all("NA"))) %>%
+        mutate(Area.with.QC   = ifelse(str_detect(all.Flags, "Flag"), NA, Area)) 
+        
+###############3##################3
+        
+# CheckFragments function
+        # Ion Ratio Ranges Table  ----------------------------------------------------
+# for each PIN, check if there is more than one fragment. If yes, determine which is quant and which is second trace.
+fragment.check <- areas.transformed %>%
+        filter(Sample.Type == "std") %>%
+        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type) %>%
+        group_by(Precursor.Ion.Name) %>%
+        mutate(Two.Fragments = unique(Product.Mz > 1)) %>%
+        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments) %>%
+        mutate(Quant.Trace = NA) %>%
+        mutate(Second.Trace = NA)
 
-for (i in 1:length(compounds)) {
-     if (length(fragments) > 1) {
-          print("woohoo")
-     } else {
-          print("nada")
-     }
-}
+Quant.Trace <- master$Daughter[master$Quan.Trace == "yes"]
+Second.Trace <- master$Daughter[master$X2nd.trace =="yes"]
+
+testing4trace <- areas.transformed %>%
+        filter(Sample.Type == "std") %>%
+        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type) %>%
+        group_by(Precursor.Ion.Name) %>%
+        mutate(Two.Fragments = unique(Product.Mz > 1)) %>%
+        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments) 
 
 
-#CheckFragments function here
-
-
-
-
+ratio <- sset$Area[sset$Product.Mz==q.trace] / sset$Area[sset$Product.Mz==sec.trace]
 
 ##########################################
+areas.split <- split(areas.transformed, areas.transformed$Sample.Type)
+
 cmpd.std.list<- split(areas.split[["std"]],
                       areas.split[["std"]]$Precursor.Ion.Name)
 cmpds <- names(cmpd.std.list)
@@ -125,7 +152,7 @@ for(i in 1:length(cmpds)){
           sec.trace <- mset$Daughter[mset$X2nd.trace=="yes"]
           
           for(j in 1:length(runs)){
-               ## is trace 2 > 5% of trace  1?
+               ## is trace 2 > 5% of trace 1?
                sset<-cmpd.std.list[[i]][cmpd.std.list[[i]]$Replicate.Name==runs[j],]
                ratio <- sset$Area[sset$Product.Mz == q.trace] / sset$Area[sset$Product.Mz == sec.trace]
                
@@ -141,7 +168,7 @@ for(i in 1:length(cmpds)){
           ## if no: ignore ion ratio
           ratios <- c(ratios,rep(NA,length(runs)))
      }
-     IR.range <- cbind(IR.range,range(ratios,na.rm = T))
+     IR.range <- cbind(IR.range, range(ratios, na.rm = T))
 }
 
 colnames(IR.range) <- cmpds
