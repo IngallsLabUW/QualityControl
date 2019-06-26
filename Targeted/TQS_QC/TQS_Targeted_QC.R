@@ -9,7 +9,8 @@ library(tidyverse)
 # TODO (rlionheart): Decide on best import practice. Upload csv via shiny app (https://shiny.rstudio.com/gallery/file-upload.html)?
 # TODO (rlionheart): Maybe rename the X2nd trace column for clarity.
 areas.raw <- read.csv("./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv", header = TRUE)
-master <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Example.csv")
+master <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Example.csv") %>%
+        rename(Second.Trace = X2nd.trace)
 
 ## Set the parameters for the QC -----------
 max.height <- 1.0e8
@@ -48,6 +49,42 @@ TransformVariables <- function(skyline.output) {
 }
 areas.transformed <- TransformVariables(areas.raw)
 
+
+# Ion Ratio Ranges Table  ----------------------------------------------------
+# CheckFragments function
+# for each PIN, check if there is more than one fragment. If yes, determine which is quant and which is second trace.
+# Is Second.Trace > 5% of Quant.Trace?
+
+fragment.check <- areas.transformed %>%
+        filter(Sample.Type == "std") %>%
+        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type) %>%
+        group_by(Precursor.Ion.Name) %>%
+        mutate(Two.Fragments = unique(Product.Mz > 1)) %>%
+        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments) %>%
+        merge(y = master,
+              by.x = c("Precursor.Ion.Name", "Product.Mz"),
+              by.y = c("Compound.Name", "Daughter"),
+              all.x = TRUE) %>%
+        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments, Quan.Trace, Second.Trace) %>%
+        mutate(Second.Trace = if_else(Second.Trace == "", "no" , as.character(Second.Trace))) %>%
+        mutate(QT.Five.Percent = ifelse(Quan.Trace == "yes", 0.05 * Product.Mz, NA)) %>%
+        group_by(Precursor.Ion.Name) %>%
+        mutate(Significant.Size = QT.Five.Percent > (Product.Mz & Second.Trace == "yes"))
+
+
+
+        
+######################################        
+
+
+## if yes: get ion ratio for QC
+if(!is.na(ratio) & ratio < 100){
+        ratios <- c(ratios,ratio)
+} else {
+        ## if no: ignore ion ratio
+        ratios <- c(ratios, NA)
+}
+######################################3
 ## Retention Time  ----------------------------------------------------
 # TODO (rlionheart): Is the filtering of the "std" imperative? does it affect the Blank and RT reference??
 RT.Range.Table <- areas.transformed %>%
@@ -97,29 +134,8 @@ first.joins <- areas.transformed %>%
         left_join(Area.Table) %>%
         left_join(SN.Table)
 
-# TODO (rlionheart): This is currently not working. Why?
-last.join <- first.joins %>%
-        mutate(all.Flags      = paste(overloaded.Flag, area.min.Flag, SN.Flag, sep = ", ")) %>%
-        mutate(all.Flags      = as.character(all.Flags %>% str_remove_all("NA, ") %>%  str_remove_all("NA"))) %>%
-        mutate(Area.with.QC   = ifelse(str_detect(all.Flags, "Flag"), NA, Area)) 
-        
-###############3##################3
-        
-# CheckFragments function
-        # Ion Ratio Ranges Table  ----------------------------------------------------
-# for each PIN, check if there is more than one fragment. If yes, determine which is quant and which is second trace.
-fragment.check <- areas.transformed %>%
-        filter(Sample.Type == "std") %>%
-        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type) %>%
-        group_by(Precursor.Ion.Name) %>%
-        mutate(Two.Fragments = unique(Product.Mz > 1)) %>%
-        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments) %>%
-        merge(y = master,
-              by.x = c("Precursor.Ion.Name", "Product.Mz"),
-              by.y = c("Compound.Name", "Daughter"),
-              all.x = TRUE) %>%
-        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments, Quan.Trace, X2nd.trace)
 
+        
 
 
 
@@ -142,7 +158,7 @@ for(i in 1:length(cmpds)){
           ## and which is the confirmation (sec) trace
           mset<-master[master$Compound.Name==cmpds[[i]],]
           q.trace   <- mset$Daughter[mset$Quan.Trace=="yes"]
-          sec.trace <- mset$Daughter[mset$X2nd.trace=="yes"]
+          sec.trace <- mset$Daughter[mset$Second.Trace=="yes"]
           
           for(j in 1:length(runs)){
                ## is trace 2 > 5% of trace 1?
