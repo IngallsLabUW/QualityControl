@@ -114,21 +114,14 @@ fragment.check <- areas.transformed %>%
         group_by(Precursor.Ion.Name) %>%
         mutate(Two.Fragments = unique(Product.Mz > 1)) %>%
         select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments) %>%
-        mutate(Quant.Trace = NA) %>%
-        mutate(Second.Trace = NA)
-
-Quant.Trace <- master$Daughter[master$Quan.Trace == "yes"]
-Second.Trace <- master$Daughter[master$X2nd.trace =="yes"]
-
-testing4trace <- areas.transformed %>%
-        filter(Sample.Type == "std") %>%
-        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type) %>%
-        group_by(Precursor.Ion.Name) %>%
-        mutate(Two.Fragments = unique(Product.Mz > 1)) %>%
-        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments) 
+        merge(y = master,
+              by.x = c("Precursor.Ion.Name", "Product.Mz"),
+              by.y = c("Compound.Name", "Daughter"),
+              all.x = TRUE) %>%
+        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments, Quan.Trace, X2nd.trace)
 
 
-ratio <- sset$Area[sset$Product.Mz==q.trace] / sset$Area[sset$Product.Mz==sec.trace]
+
 
 ##########################################
 areas.split <- split(areas.transformed, areas.transformed$Sample.Type)
