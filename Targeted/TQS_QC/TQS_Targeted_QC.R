@@ -57,10 +57,19 @@ areas.transformed <- TransformVariables(areas.raw)
 
 fragment.check <- areas.transformed %>%
         filter(Sample.Type == "std") %>%
-        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type) %>%
-        group_by(Precursor.Ion.Name) %>%
-        mutate(Two.Fragments = unique(Product.Mz > 1)) %>%
-        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments) %>%
+        select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type)
+
+fragment.unique <-unique(fragment.check %>% select(Precursor.Ion.Name, Precursor.Mz, Product.Mz))
+
+fragment.multi.unique <- fragment.unique %>%
+        count(Precursor.Ion.Name)  %>%
+        mutate(Two.Fragments = ifelse((n==1), FALSE, TRUE)) %>%
+        select(-n)
+
+fragment.check <- fragment.check %>%
+        left_join(fragment.multi.unique) 
+
+fragment.check <- fragment.check %>%
         merge(y = master,
               by.x = c("Precursor.Ion.Name", "Product.Mz"),
               by.y = c("Compound.Name", "Daughter"),
@@ -68,12 +77,30 @@ fragment.check <- areas.transformed %>%
         select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments, Quan.Trace, Second.Trace) %>%
         mutate(Second.Trace = if_else(Second.Trace == "", "no" , as.character(Second.Trace))) %>%
         mutate(QT.Five.Percent = ifelse(Quan.Trace == "yes", 0.05 * Product.Mz, NA)) %>%
-        group_by(Precursor.Ion.Name) %>%
-        mutate(Significant.Size = QT.Five.Percent > (Product.Mz & Second.Trace == "yes"))
-
-
-
+        # Everthing good above this line
         
+        group_by(Precursor.Ion.Name) %>%
+        mutate(Significant.Size = QT.Five.Percent > (Product.Mz & Second.Trace == "yes")) %>%
+        mutate(IR.Ratio = ifelse(Significant.Size == TRUE, (Product.Mz[Quan.Trace == "yes"] / Product.Mz[Second.Trace == "yes"]), NA))
+
+######################################        
+# THIS WORKS SAVE IT
+fake.data.frame <- areas.transformed %>%
+        filter(Sample.Type == "std") %>%
+        filter(Precursor.Ion.Name %in% c("Picolinic Acid", "Ketoglutaric Acid")) %>%
+        select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type) 
+fake.data.frame$Product.Mz[which(fake.data.frame$Product.Mz == 57.0843)] = 101.0140
+
+
+fake.data.unqiue <- unique(fake.data.frame %>% select(Precursor.Ion.Name, Precursor.Mz, Product.Mz))
+
+fake.data.fragment.ismulti <- fake.data.unqiue %>%
+        count(Precursor.Ion.Name)  %>%
+        mutate(fragments = ifelse((n==1), FALSE, TRUE)) %>%
+        select(-n)
+
+fake.data.frame2 <- fake.data.frame %>%
+        left_join(fake.data.fragment.ismulti)
 ######################################        
 
 
