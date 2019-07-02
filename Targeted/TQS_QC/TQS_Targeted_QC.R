@@ -2,13 +2,21 @@
 # June 24th, 2019
 # Regina Lionheart
 
+library(plyr)
 library(reshape2)
 library(tidyverse)
+options(scipen=999)
+
+
+# TODO (rlionheart): Add style guide and move functions to top.
+# TODO (kheal, aboysen): Would it be nice to have all these tables accessible for download (ie, the RT.Range.Table, Area.Table, whatever)? Helpful to see an overview of the run?
+# Alternately, I could include a section that will print a custom summary of the run with whatever is interesting.
+# TODO (rlionheart, kheal, aboysen): Why is the IR table giving different data than the original skyline TQS QC?
 
 # Import files
-# TODO (rlionheart): Decide on best import practice. Upload csv via shiny app (https://shiny.rstudio.com/gallery/file-upload.html)?
-# TODO (rlionheart): Maybe rename the X2nd trace column for clarity.
-areas.raw <- read.csv("./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv", header = TRUE)
+input_file <- "./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv"
+areas.raw <- read.csv("./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv", row.names = NULL, header = TRUE) %>%
+        select(-X)
 master <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Example.csv") %>%
         rename(Second.Trace = X2nd.trace)
 
@@ -25,9 +33,8 @@ SN.min <- 4
 run.type <- tolower(str_extract(areas.raw$Replicate.Name, "(?<=_)[^_]+(?=_)"))
 
 ## Change variables classes as needed, add Sample.Type column
-# TODO (rlionheart): drop index columm (why does it show up here but not in the other script?)
+# TODO (rlionheart): add documentation
 TransformVariables <- function(skyline.output) {
-     # TODO (rlionheart): add documentation
      before <- lapply(skyline.output, class)
      cat("Original class variables ", "\n")
      print(paste(colnames(skyline.output), ":", before))
@@ -51,164 +58,165 @@ areas.transformed <- TransformVariables(areas.raw)
 
 
 # Ion Ratio Ranges Table  ----------------------------------------------------
-# CheckFragments function
-# for each PIN, check if there is more than one fragment. If yes, determine which is quant and which is second trace.
-# Is Second.Trace > 5% of Quant.Trace?
+# TODO (rlionheart): add documentation to CheckFragments function. 
+# TODO (rlionheart): add explanation of what is happening to find the IR range table.
+# TODO (rlionheart): Document and clean up function
 
-fragment.check <- areas.transformed %>%
+CheckFragments <- function(areas.transformed) { 
+
+        fragment.check <- areas.transformed %>%
         filter(Sample.Type == "std") %>%
         select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type)
 
-fragment.unique <-unique(fragment.check %>% select(Precursor.Ion.Name, Precursor.Mz, Product.Mz))
+        fragment.unique <- fragment.unique <-unique(fragment.check %>% select(Precursor.Ion.Name, Precursor.Mz, Product.Mz))
 
-fragment.multi.unique <- fragment.unique %>%
-        count(Precursor.Ion.Name)  %>%
-        mutate(Two.Fragments = ifelse((n==1), FALSE, TRUE)) %>%
-        select(-n)
+        fragment.multi.unique <- fragment.unique %>%
+                count(Precursor.Ion.Name) %>%
+                mutate(Two.Fragments = ifelse((n==1), FALSE, TRUE)) %>%
+                select(-n)
 
-fragment.check <- fragment.check %>%
-        left_join(fragment.multi.unique) 
-
-fragment.check <- fragment.check %>%
-        merge(y = master,
-              by.x = c("Precursor.Ion.Name", "Product.Mz"),
-              by.y = c("Compound.Name", "Daughter"),
-              all.x = TRUE) %>%
-        select(Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments, Quan.Trace, Second.Trace) %>%
-        mutate(Second.Trace = if_else(Second.Trace == "", "no" , as.character(Second.Trace))) %>%
-        mutate(QT.Five.Percent = ifelse(Quan.Trace == "yes", 0.05 * Product.Mz, NA)) %>%
-        # Everthing good above this line
+        fragments.checked <- fragment.check %>%
+                left_join(fragment.multi.unique, by = "Precursor.Ion.Name" ) %>%
+                merge(y = master,
+                        by.x = c("Precursor.Ion.Name", "Product.Mz"),
+                        by.y = c("Compound.Name", "Daughter"),
+                        all.x = TRUE) %>%
+                select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments, Quan.Trace, Second.Trace) %>%
+                mutate(Second.Trace = ifelse(Second.Trace == "", FALSE, TRUE)) %>%
+                mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
+                mutate(QT.Five.Percent = ifelse((Two.Fragments == TRUE & Quan.Trace == TRUE), 0.05 * Product.Mz, NA)) %>%
+                mutate(Significant.Size = QT.Five.Percent < Product.Mz) %>%
+                mutate(Std.Type = str_match(Replicate.Name, "\\d+_\\w+_(\\w+)_\\d+")[,2]) %>%
+                group_by(Std.Type, Precursor.Ion.Name, Product.Mz) %>%
+                summarise_all(first) %>%
+                arrange(Precursor.Ion.Name)
         
-        group_by(Precursor.Ion.Name) %>%
-        mutate(Significant.Size = QT.Five.Percent > (Product.Mz & Second.Trace == "yes")) %>%
-        mutate(IR.Ratio = ifelse(Significant.Size == TRUE, (Product.Mz[Quan.Trace == "yes"] / Product.Mz[Second.Trace == "yes"]), NA))
-
-######################################        
-# THIS WORKS SAVE IT
-fake.data.frame <- areas.transformed %>%
-        filter(Sample.Type == "std") %>%
-        filter(Precursor.Ion.Name %in% c("Picolinic Acid", "Ketoglutaric Acid")) %>%
-        select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type) 
-fake.data.frame$Product.Mz[which(fake.data.frame$Product.Mz == 57.0843)] = 101.0140
-
-
-fake.data.unqiue <- unique(fake.data.frame %>% select(Precursor.Ion.Name, Precursor.Mz, Product.Mz))
-
-fake.data.fragment.ismulti <- fake.data.unqiue %>%
-        count(Precursor.Ion.Name)  %>%
-        mutate(fragments = ifelse((n==1), FALSE, TRUE)) %>%
-        select(-n)
-
-fake.data.frame2 <- fake.data.frame %>%
-        left_join(fake.data.fragment.ismulti)
-######################################        
-
-
-## if yes: get ion ratio for QC
-if(!is.na(ratio) & ratio < 100){
-        ratios <- c(ratios,ratio)
-} else {
-        ## if no: ignore ion ratio
-        ratios <- c(ratios, NA)
+        return(fragments.checked)
 }
-######################################3
+
+fragments.checked <- CheckFragments(areas.transformed)
+IR.Table <- fragments.checked %>%
+        group_by(Precursor.Ion.Name, Std.Type) %>%
+        mutate(IR.Ratio = ifelse(TRUE %in% Significant.Size, (Product.Mz[Quan.Trace == TRUE] / Product.Mz[Second.Trace == TRUE]), NA)) %>%
+        select(Precursor.Ion.Name, Std.Type, IR.Ratio)  %>%
+        unique()
+
+        
+
 ## Retention Time  ----------------------------------------------------
-# TODO (rlionheart): Is the filtering of the "std" imperative? does it affect the Blank and RT reference??
 RT.Range.Table <- areas.transformed %>%
         select(Precursor.Ion.Name, Retention.Time, Sample.Type) %>%
-        #group_by(Sample.Type) %>%
-        #filter(Sample.Type == "std") %>%
+        filter(Sample.Type == "std") %>%
         group_by(Precursor.Ion.Name) %>%
-        mutate(RT.Reference = mean(Retention.Time)) %>%
-        mutate(RT.min = min(Retention.Time)) %>%
-        mutate(RT.max = max(Retention.Time)) %>%
-        mutate(RT.Flag = ifelse((abs(Retention.Time - RT.Reference) > RT.flex), "RT.Flag", NA)) 
+        mutate(RT.min = min(Retention.Time, na.rm = TRUE)) %>%
+        mutate(RT.max = max(Retention.Time, na.rm = TRUE)) %>%
+        mutate(RT.Reference = mean(Retention.Time, na.rm = TRUE)) %>%
+        select(-Retention.Time) %>%
+        unique()
 
-RT.Range.Table <- as.data.frame(RT.Range.Table)
 
 ## Blanks ---------------------------------------
+## if the area of the blank is more than blk.thresh% of the
+## area in the sample, make a flag
 Blank.Table <- areas.transformed %>%
         select(Precursor.Ion.Name, Area, Sample.Type) %>%
-        group_by(Sample.Type) %>%
-        # filter(Sample.Type == "blk") %>%
+        filter(Sample.Type == "blk") %>%
         group_by(Precursor.Ion.Name) %>%
-        mutate(Blank.Reference = mean(Area, na.rm = TRUE)) %>%
-        mutate(blank.Flag = ifelse((Area / Blank.Reference) < blk.thresh, "blank.Flag", NA))
+        mutate(Blank.max = max(Area, na.rm = TRUE)) %>%
+        select(-Area) %>%
+        unique()
 
-        
+
 ## Height  ---------------------------------------
 Height.Table <- areas.transformed %>%
-     select(Precursor.Ion.Name, Height) %>%
-     mutate(height.min.Flag = ifelse((Height < min.height), "height.min.Flag", NA)) %>%
-     mutate(overloaded.Flag = ifelse((Height > max.height), "overloaded.Flag", NA))
+        select(Replicate.Name, Sample.Type, Precursor.Ion.Name, Height) %>%
+        filter(Sample.Type == "smp")
 
 ## Area  ---------------------------------------
 Area.Table <- areas.transformed %>%
-     select(Precursor.Ion.Name, Area) %>%
-     mutate(area.min.Flag = ifelse((Area < area.min), "area.min.Flag", NA))
+        select(Replicate.Name, Sample.Type, Precursor.Ion.Name, Area) %>%
+        filter(Sample.Type == "smp") %>%
+        mutate(area.min.Flag = ifelse((Area < area.min), "area.min.Flag", NA))
 
 
 ## Signal to Noise  ---------------------------------------
+# TODO (rlionheart): Ditto question for S.N?
 SN.Table <- areas.transformed %>%
-     select(Precursor.Ion.Name, Area, Background) %>%
-     mutate(SN.Flag = ifelse(((Area / Background) < SN.min), "SN.Flag", NA)) 
+        select(Replicate.Name, Sample.Type, Precursor.Ion.Name, Area, Background) %>%
+        filter(Sample.Type == "smp") %>%
+        mutate(Signal.to.Noise = (Area / Background)) %>%
+        mutate(SN.Flag = ifelse((Signal.to.Noise < SN.min), "SN.Flag", NA))
 
 
+## Join datasets  ---------------------------------------
 
-first.joins <- areas.transformed %>%
-        select(Replicate.Name:Background, Height) %>%
-        left_join(Height.Table) %>%
-        left_join(Area.Table) %>%
-        left_join(SN.Table)
-
-
+## Construct final output
+# TODO (rlionheart): Add IR info & flags
+# IR.ok[1,] <- IR.range[1,]*(1-IR.flex)
+# IR.ok[2,] <- IR.range[2,]*(1+IR.flex)
+# 
+# IR.flags.added <- areas.transformed %>%
+#         filter(Sample.Type %in% c("smp", "poo")) %>%
+#         left_join(IR.Table, by = "Precursor.Ion.Name") 
+####
         
 
+RT.flags.added <- areas.transformed %>%
+        filter(Sample.Type %in% c("smp", "poo")) %>%
+        left_join(RT.Range.Table, by = "Precursor.Ion.Name") %>%
+        mutate(RT.Flag = ifelse((abs(Retention.Time - RT.Reference) > RT.flex), "RT.Flag", NA)) %>%
+        select(Replicate.Name, Precursor.Ion.Name:Background, Height, RT.Flag) 
+        
+Blank.flags.added <- RT.flags.added %>%
+        left_join(Blank.Table, by = "Precursor.Ion.Name") %>%
+        mutate(Blank.Reference = mean(Area, na.rm = TRUE)) %>%
+        mutate(blank.Flag = ifelse((Area / Blank.Reference) < blk.thresh, "blank.Flag", NA)) %>%
+        select(Replicate.Name:RT.Flag, blank.Flag)
 
+Height.flags.added <- Blank.flags.added %>%
+        mutate(height.min.Flag = ifelse((Height < min.height), "height.min.Flag", NA)) %>%
+        mutate(overloaded.Flag = ifelse((Height > max.height), "overloaded.Flag", NA)) 
 
-##########################################
-areas.split <- split(areas.transformed, areas.transformed$Sample.Type)
+Area.flags.added <- Height.flags.added %>%
+        mutate(area.min.Flag = ifelse((Area < area.min), "area.min.Flag", NA))
 
-cmpd.std.list<- split(areas.split[["std"]],
-                      areas.split[["std"]]$Precursor.Ion.Name)
-cmpds <- names(cmpd.std.list)
-IR.range <- c()
+SN.flags.added <- Area.flags.added %>%
+        mutate(Signal.to.Noise = (Area / Background)) %>%
+        mutate(SN.Flag = ifelse((Signal.to.Noise < SN.min), "SN.Flag", NA)) %>%
+        select(Replicate.Name:area.min.Flag, SN.Flag)
+        
+final.table <- SN.flags.added %>%
+        mutate(all.Flags      = paste(RT.Flag, blank.Flag, height.min.Flag, overloaded.Flag, area.min.Flag, SN.Flag, sep = ", ")) %>%
+        mutate(all.Flags      = as.character(all.Flags %>% str_remove_all("NA, ") %>%  str_remove_all("NA")))
 
-for(i in 1:length(cmpds)){
-     frags <- unique(cmpd.std.list[[i]]$Product.Mz)
-     runs <- unique(cmpd.std.list[[i]]$Replicate.Name)
-     ratios <-vector()
-     
-     ## is there more than one fragment?
-     if (length(frags)>1){
-          ## if yes then figure out which is the quantification trace
-          ## and which is the confirmation (sec) trace
-          mset<-master[master$Compound.Name==cmpds[[i]],]
-          q.trace   <- mset$Daughter[mset$Quan.Trace=="yes"]
-          sec.trace <- mset$Daughter[mset$Second.Trace=="yes"]
-          
-          for(j in 1:length(runs)){
-               ## is trace 2 > 5% of trace 1?
-               sset<-cmpd.std.list[[i]][cmpd.std.list[[i]]$Replicate.Name==runs[j],]
-               ratio <- sset$Area[sset$Product.Mz == q.trace] / sset$Area[sset$Product.Mz == sec.trace]
-               
-               ## if yes: get ion ratio for QC
-               if(!is.na(ratio) & ratio < 100){
-                    ratios <- c(ratios,ratio)
-               } else {
-                    ## if no: ignore ion ratio
-                    ratios <- c(ratios, NA)
-               }
-          }
-     } else {
-          ## if no: ignore ion ratio
-          ratios <- c(ratios,rep(NA,length(runs)))
-     }
-     IR.range <- cbind(IR.range, range(ratios, na.rm = T))
+        
+# If there are any standards, add those to the bottom of the dataset.
+Stds.test <- grepl("_Std_", areas.raw$Replicate.Name)
+
+if (any(Stds.test == TRUE)) {
+        print("There are standards in this run. Joining standard samples to the bottom of the dataset!", quote = FALSE)
+        standards <- areas.transformed[grep("Std", areas.transformed$Replicate.Name), ]
+        final.table <- rbind.fill(final.table, standards)
+} else {
+        print("No standards exist in this set.")
 }
 
-colnames(IR.range) <- cmpds
-###########################################
+
+# Print to file with comments and new name!`    `
+con <- file(paste("TQSQC_", basename(input_file), sep = ""), open = "wt")
+writeLines(paste("Hello! Welcome to the world of TQS Quality Control! ",
+                 "Maximum height for peaks: ", max.height, ". ",
+                 "Minimum height for a real peak: ", min.height, ". ",
+                 "Minimum area for a real peak: ", area.min, ". ",
+                 "RT flexibility: ", RT.flex, ". ",
+                 "Ion ratio (IR) flexibility: ", IR.flex, ". ",
+                 "Blank can be this fraction of a sample: ", blk.thresh, ". ",
+                 "S/N ratio: " , SN.min, ". ",
+                 "Processed on: ", Sys.time(), ". ",
+                 sep = ""), con)
+write.csv(final.table, con, row.names = FALSE)
+close(con)
+
 
 
 
