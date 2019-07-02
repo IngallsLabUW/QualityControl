@@ -205,7 +205,6 @@ if (any(Stds.test == TRUE)) {
 # Print to file with comments and new name!`    `
 con <- file(paste("TQSQC_", basename(input_file), sep = ""), open = "wt")
 writeLines(paste("Hello! Welcome to the world of TQS Quality Control! ",
-                 "Maximum height for peaks: ", max.height, ". ",
                  "Minimum height for a real peak: ", min.height, ". ",
                  "Minimum area for a real peak: ", area.min, ". ",
                  "RT flexibility: ", RT.flex, ". ",
