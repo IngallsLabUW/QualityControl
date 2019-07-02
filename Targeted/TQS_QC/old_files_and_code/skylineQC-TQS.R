@@ -8,10 +8,10 @@ library("plyr")
 library("reshape2")
 
 ## Set the parameters for the QC ----------------------------------------
-filename <- "ExampleSkylineOutput.csv"
-areas.raw <- read.csv(filename ,header=TRUE, comment.char="", as.is=TRUE)
-masterfile <- "HILIC_MasterList_Example.csv"
-master <- read.csv(masterfile)
+filename <- "./Targeted/TQS_QC/datafiles/ExampleSkylineOutput.csv"
+areas.raw <- read.csv("Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv" ,header=TRUE, comment.char="", as.is=TRUE)
+masterfile <- "./Targeted/TQS_QC/datafiles/HILIC_MasterList_Example.csv"
+master <- read.csv("Targeted/TQS_QC/datafiles/HILIC_MasterList_Example.csv")
 
 ## pick overload value (suggestion: 1e8)
 max.height <- 1.0e8
@@ -337,16 +337,10 @@ final.output <- rbind(output2, blank.data[,colnames(output2)])
 
 ## Output with: comment -------------------------
 ## Ion name, area, was a peak removed?
-comment.text <- paste("# Hello! welcome to your data! ","Overload height: ",
-                      max.height, ". ", "RT flexibility: ", RT.flex, ". ",
-                      "Ion ratio flexibility: ", IR.flex, ". ",
-                      "Blank can be this fraction of a sample: ",blk.thresh, ". ",
-                      "S/N threshold: " , SN.thresh, ". ",
-                      "Minimum peak height: ", min.height, ". ",
-                      "Processed on: ", Sys.time(), sep="")
-new.filename <- paste("QC_output",filename,sep="")
-con <- file(new.filename, open="wt")
-writeLines(paste(comment.text), con)
-write.csv(final.output, con)
+con <- file(paste("test", basename(filename), sep = ""), open = "wt")
+writeLines(paste("TESTING",
+                 "Processed on: ", Sys.time(), ". ",
+                 sep = ""), con)
+write.csv(final.output, con, row.names = FALSE)
 close(con)
 
