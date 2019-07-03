@@ -66,9 +66,9 @@ CheckFragments <- function(areas.transformed) {
 
         fragment.check <- areas.transformed %>%
         filter(Sample.Type == "std") %>%
-        select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Sample.Type)
+        select(Replicate.Name, Precursor.Ion.Name, Area, Precursor.Mz, Product.Mz, Sample.Type)
 
-        fragment.unique <- fragment.unique <-unique(fragment.check %>% select(Precursor.Ion.Name, Precursor.Mz, Product.Mz))
+        fragment.unique <-unique(fragment.check %>% select(Precursor.Ion.Name, Precursor.Mz, Product.Mz))
 
         fragment.multi.unique <- fragment.unique %>%
                 count(Precursor.Ion.Name) %>%
@@ -81,24 +81,26 @@ CheckFragments <- function(areas.transformed) {
                         by.x = c("Precursor.Ion.Name", "Product.Mz"),
                         by.y = c("Compound.Name", "Daughter"),
                         all.x = TRUE) %>%
-                select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Two.Fragments, Quan.Trace, Second.Trace) %>%
+                select(Replicate.Name, Precursor.Ion.Name, Area, Precursor.Mz, Product.Mz, Two.Fragments, Quan.Trace, Second.Trace) %>%
                 mutate(Second.Trace = ifelse(Second.Trace == "", FALSE, TRUE)) %>%
                 mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
                 mutate(QT.Five.Percent = ifelse((Two.Fragments == TRUE & Quan.Trace == TRUE), 0.05 * Product.Mz, NA)) %>%
                 mutate(Significant.Size = QT.Five.Percent < Product.Mz) %>%
                 mutate(Std.Type = str_match(Replicate.Name, "\\d+_\\w+_(\\w+)_\\d+")[,2]) %>%
-                group_by(Std.Type, Precursor.Ion.Name, Product.Mz) %>%
+                group_by(Std.Type, Precursor.Ion.Name, Product.Mz) %>% 
                 summarise_all(first) %>%
-                arrange(Precursor.Ion.Name)
-        
+                arrange(Precursor.Ion.Name) %>%
+                select(Std.Type, Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Area, Two.Fragments: Significant.Size)
+                
         return(fragments.checked)
 }
 
 fragments.checked <- CheckFragments(areas.transformed)
+
 IR.Table <- fragments.checked %>%
         group_by(Precursor.Ion.Name, Std.Type) %>%
-        mutate(IR.Ratio = ifelse(TRUE %in% Significant.Size, (Product.Mz[Quan.Trace == TRUE] / Product.Mz[Second.Trace == TRUE]), NA)) %>%
-        select(Precursor.Ion.Name, Std.Type, IR.Ratio)  %>%
+        mutate(Std.IR.Ratio = ifelse(TRUE %in% Significant.Size, (Area[Quan.Trace == TRUE] / Area[Second.Trace == TRUE]), NA)) %>%
+        select(Precursor.Ion.Name, Std.Type, Std.IR.Ratio)  %>%
         unique()
 
         
@@ -148,25 +150,48 @@ SN.Table <- areas.transformed %>%
         mutate(SN.Flag = ifelse((Signal.to.Noise < SN.min), "SN.Flag", NA))
 
 
-## Join datasets  ---------------------------------------
 
 ## Construct final output
-# TODO (rlionheart): Add IR info & flags
-# IR.ok[1,] <- IR.range[1,]*(1-IR.flex)
-# IR.ok[2,] <- IR.range[2,]*(1+IR.flex)
-# 
-# IR.flags.added <- areas.transformed %>%
-#         filter(Sample.Type %in% c("smp", "poo")) %>%
-#         left_join(IR.Table, by = "Precursor.Ion.Name") 
-####
-        
+# TODO (rlionheart): clean this up, maybe include in function? Make above function usable for samples.
+all.samples <- areas.transformed %>%
+        filter(Sample.Type %in% c("smp", "poo"))
 
-RT.flags.added <- areas.transformed %>%
-        filter(Sample.Type %in% c("smp", "poo")) %>%
-        left_join(RT.Range.Table, by = "Precursor.Ion.Name") %>%
-        mutate(RT.Flag = ifelse((abs(Retention.Time - RT.Reference) > RT.flex), "RT.Flag", NA)) %>%
-        select(Replicate.Name, Precursor.Ion.Name:Background, Height, RT.Flag) 
-        
+unique.smp.frags <-unique(all.samples %>% select(Precursor.Ion.Name, Precursor.Mz, Product.Mz))
+
+unique.smp.frags2 <- unique.smp.frags %>%
+        count(Precursor.Ion.Name) %>%
+        mutate(Two.Fragments = ifelse((n==1), FALSE, TRUE)) %>%
+        select(-n)
+
+all.samples.IR <- all.samples %>%
+        left_join(unique.smp.frags2, by = "Precursor.Ion.Name" ) %>%
+        merge(y = master,
+              by.x = c("Precursor.Ion.Name", "Product.Mz"),
+              by.y = c("Compound.Name", "Daughter"),
+              all.x = TRUE) %>%
+        select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Area, Two.Fragments, Quan.Trace, Second.Trace) %>%
+        mutate(Second.Trace = ifelse(Second.Trace == "", FALSE, TRUE)) %>%
+        mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
+        mutate(QT.Five.Percent = ifelse((Two.Fragments == TRUE & Quan.Trace == TRUE), 0.05 * Product.Mz, NA)) %>%
+        mutate(Significant.Size = QT.Five.Percent < Product.Mz) %>%
+        group_by(Precursor.Ion.Name) %>%
+        mutate(IR.Ratio = ifelse(TRUE %in% Significant.Size, (Area[Quan.Trace == TRUE] / Area[Second.Trace == TRUE]), NA))
+
+## Join datasets  ---------------------------------------
+
+
+IR.flags.added <- all.samples.IR %>%
+        left_join(IR.Table, by = "Precursor.Ion.Name") %>%
+        mutate(IR.Flag = ifelse((abs(IR.Ratio - Std.IR.Ratio) > IR.flex), "IR.Flag", NA))
+
+
+RT.flags.added <- IR.flags.added %>% 
+    left_join(select(all.samples, Retention.Time, Precursor.Ion.Name), by = c("Precursor.Ion.Name")) %>%
+    left_join(RT.Range.Table, by = "Precursor.Ion.Name") %>%
+    mutate(RT.Flag = ifelse((abs(Retention.Time - RT.Reference) > RT.flex), "RT.Flag", NA)) %>%
+    select(Replicate.Name:Area, IR.Flag, RT.Flag)
+    
+
 Blank.flags.added <- RT.flags.added %>%
         left_join(Blank.Table, by = "Precursor.Ion.Name") %>%
         mutate(Blank.Reference = mean(Area, na.rm = TRUE)) %>%
@@ -174,6 +199,7 @@ Blank.flags.added <- RT.flags.added %>%
         select(Replicate.Name:RT.Flag, blank.Flag)
 
 Height.flags.added <- Blank.flags.added %>%
+        left_join(select(all.samples, Height, Precursor.Ion.Name), by = c("Precursor.Ion.Name")) %>%
         mutate(height.min.Flag = ifelse((Height < min.height), "height.min.Flag", NA)) %>%
         mutate(overloaded.Flag = ifelse((Height > max.height), "overloaded.Flag", NA)) 
 
@@ -181,10 +207,11 @@ Area.flags.added <- Height.flags.added %>%
         mutate(area.min.Flag = ifelse((Area < area.min), "area.min.Flag", NA))
 
 SN.flags.added <- Area.flags.added %>%
+        left_join(select(all.samples, Background, Precursor.Ion.Name), by = c("Precursor.Ion.Name")) %>%
         mutate(Signal.to.Noise = (Area / Background)) %>%
         mutate(SN.Flag = ifelse((Signal.to.Noise < SN.min), "SN.Flag", NA)) %>%
         select(Replicate.Name:area.min.Flag, SN.Flag)
-        
+####
 final.table <- SN.flags.added %>%
         mutate(all.Flags      = paste(RT.Flag, blank.Flag, height.min.Flag, overloaded.Flag, area.min.Flag, SN.Flag, sep = ", ")) %>%
         mutate(all.Flags      = as.character(all.Flags %>% str_remove_all("NA, ") %>%  str_remove_all("NA")))
