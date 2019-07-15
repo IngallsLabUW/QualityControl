@@ -180,22 +180,21 @@ Blank.Table <- areas.transformed %>%
 
 ## Height  ---------------------------------------
 Height.Table <- areas.transformed %>%
-  select(Replicate.Name, Sample.Type, Precursor.Ion.Name, Height) %>%
-  filter(Sample.Type == "smp")
+  select(Replicate.Name, Sample.Type, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Height) %>%
+  filter(Sample.Type %in% c("smp", "poo")) 
 
 ## Area  ---------------------------------------
 Area.Table <- areas.transformed %>%
   select(Replicate.Name, Sample.Type, Precursor.Ion.Name, Area) %>%
-  filter(Sample.Type == "smp") %>%
+  filter(Sample.Type %in% c("smp", "poo")) %>%
   mutate(area.min.Flag = ifelse((Area < area.min), "area.min.Flag", NA))
 
 
 ## Signal to Noise  ---------------------------------------
 SN.Table <- areas.transformed %>%
   select(Replicate.Name, Sample.Type, Precursor.Ion.Name, Area, Background) %>%
-  filter(Sample.Type == "smp") %>%
-  mutate(Signal.to.Noise = (Area / Background)) %>%
-  mutate(SN.Flag = ifelse((Signal.to.Noise < SN.min), "SN.Flag", NA))
+  filter(Sample.Type %in% c("smp", "poo")) %>%
+  mutate(Signal.to.Noise = (Area / Background)) 
 
 
 
@@ -212,33 +211,33 @@ IR.flags.added <- CheckSmpFragments(areas.transformed) %>%
   mutate(IR.Flag = ifelse((IR.Ratio < (IR.min - IR.flex) & IR.Ratio > (IR.max + IR.flex)), "IR.Flag", NA)) %>%
   select(Replicate.Name:Area, IR.Flag)
 
-
-RT.flags.added <- IR.flags.added %>% 
-  left_join(select(all.samples, Retention.Time, Precursor.Ion.Name), by = c("Precursor.Ion.Name")) %>%
+RT.flags.added <- IR.flags.added %>%
+  merge(y = all.samples, all.x = TRUE) %>%
   left_join(RT.Range.Table, by = "Precursor.Ion.Name") %>%
   mutate(RT.Flag = ifelse((abs(Retention.Time - RT.Reference) > RT.flex), "RT.Flag", NA)) %>%
-  select(Replicate.Name:Area, IR.Flag, RT.Flag)
-
+  select(Replicate.Name:Area, IR.Flag, RT.Flag) %>%
+  arrange(Precursor.Ion.Name, Product.Mz)
 
 Blank.flags.added <- RT.flags.added %>%
   left_join(Blank.Table, by = "Precursor.Ion.Name") %>%
   mutate(Blank.Reference = mean(Area, na.rm = TRUE)) %>%
   mutate(blank.Flag = ifelse((Area / Blank.Reference) < blk.thresh, "blank.Flag", NA)) %>%
   select(Replicate.Name:RT.Flag, blank.Flag)
-
+  
 Height.flags.added <- Blank.flags.added %>%
-  left_join(select(all.samples, Height, Precursor.Ion.Name), by = c("Precursor.Ion.Name")) %>%
+  left_join(Height.Table, by = c("Replicate.Name", "Precursor.Ion.Name", "Precursor.Mz", "Product.Mz")) %>%
   mutate(height.min.Flag = ifelse((Height < min.height), "height.min.Flag", NA)) %>%
-  mutate(overloaded.Flag = ifelse((Height > max.height), "overloaded.Flag", NA)) 
+  mutate(overloaded.Flag = ifelse((Height > max.height), "overloaded.Flag", NA)) %>%
+  select(-Height)
 
 Area.flags.added <- Height.flags.added %>%
-  mutate(area.min.Flag = ifelse((Area < area.min), "area.min.Flag", NA))
+  mutate(area.min.Flag = ifelse((Area < area.min), "area.min.Flag", NA)) %>%
+  select(-Sample.Type)
 
 SN.flags.added <- Area.flags.added %>%
-  left_join(select(all.samples, Background, Precursor.Ion.Name), by = c("Precursor.Ion.Name")) %>%
-  mutate(Signal.to.Noise = (Area / Background)) %>%
+  left_join(SN.Table, by = c("Replicate.Name", "Precursor.Ion.Name", "Area")) %>%
   mutate(SN.Flag = ifelse((Signal.to.Noise < SN.min), "SN.Flag", NA)) %>%
-  select(Replicate.Name:area.min.Flag, SN.Flag)
+  select(-c(Sample.Type:Signal.to.Noise))
 
 
 
