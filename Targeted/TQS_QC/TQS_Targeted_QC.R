@@ -116,9 +116,6 @@ CheckSmpFragments <- function(areas.transformed) {
   return(all.samples.IR)
 }
 
-# TODO (kheal, aboysen): Would it be nice to have all these tables accessible for download (ie, the RT.Range.Table, Area.Table, whatever)? Helpful to see an overview of the run?
-# Alternately, I could include a section that will print a custom summary of the run with whatever is interesting.
-
 # Import files - this import format will be changed when integrated with Shiny
 input_file <- "./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv"
 areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv", row.names = NULL, header = TRUE) %>% select(-X)
