@@ -95,7 +95,7 @@ CreateFirstFlags <- function(skyline.output, area.min, SN.min, ppm.flex) {
   first.flags <- skyline.output %>%
     filter(Replicate.Name %in% blank.matcher$Replicate.Name) %>%
     mutate(SN.Flag       = ifelse(((Area / Background) < SN.min), "SN.Flag", NA)) %>%
-    mutate(ppm.Flag      = ifelse(abs(Mass.Error.PPM) > ppm.flex), "ppm.Flag", NA) %>%
+    mutate(ppm.Flag      = ifelse(abs(Mass.Error.PPM) > ppm.flex, "ppm.Flag", NA)) %>%
     mutate(area.min.Flag = ifelse((Area < area.min), "area.min.Flag", NA))
   
   return(first.flags)
