@@ -27,10 +27,13 @@ Samples should be run in the following manner for the quality control and [B-MIS
 
 QE | TQS
 ------------ | -------------
-CSV of skyline output | *in progress*
-CSV pairing blank replicates with their appropriate samples | *in progress*
+CSV of skyline output | CSV of skyline output
+CSV pairing blank replicates with their appropriate samples | CSV master list of compounds for matching traces.
 
 For an example of the blank/samples csv file, please see Targeted/QE_QC/datafiles/Samps_With_Blanks.csv.
+For an example of a master list csv file, please see Targeted/TQS_QC/datafiles/HILIC_MasterList_Example.csv.
+
+Please note that for the TQS, the master list should have the following columns: *Group, Compound Name, Parent, Daughter, Retention Time, Parent Charge, Daughter Charge, Notes, Function Number, Cone_voltage, Collision_energy, Quan Trace, 2nd trace*
 
 
 ***
@@ -59,6 +62,22 @@ library(tidyverse)
 
 ### TQ-S Quality Control
 
+TQS quality control is written as a normal R program, requiring manual input of file paths for the Skyline output and the appropriate master list. Please note that this manual input will be changed in a future release. 
+
+**Output**
+
+Similar to the QE Quality Control, this output will be saved as "TQSQC_ + original skyline output filename" to your working directory. HILICpos.csv would be saved as TQSQC_HILICpos.csv.
+
+Remember to set your numerical output options to undo the default scientific notation setting. This will make your values much easier to read.
+
+**Required packages available on CRAN**
+
+```R
+library(plyr)
+library(reshape2)
+library(tidyverse)
+options(scipen=999)
+```
 *This section is still in progress. We appreciate your patience!*
 
 ***
