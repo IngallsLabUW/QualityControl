@@ -117,9 +117,9 @@ CheckSmpFragments <- function(areas.transformed) {
 }
 
 # Import files - this import format will be changed when integrated with Shiny
-input_file <- "./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv"
-areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv", row.names = NULL, header = TRUE) %>% select(-X)
-master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Example.csv") %>% rename(Second.Trace = X2nd.trace)
+input_file <- "your.file.here"
+areas.raw  <- read.csv("your.file.here", row.names = NULL, header = TRUE) #%>% select(-X)
+master     <- read.csv("your.file.here") %>% rename(Second.Trace = X2nd.trace)
 
 # Set the parameters for the QC
 max.height <- 1.0e8
@@ -220,9 +220,11 @@ RT.flags.added <- IR.flags.added %>%
 # greater than the set blk.thresh value, add a flag.
 Blank.flags.added <- RT.flags.added %>%
   left_join(Blank.Table, by = "Precursor.Ion.Name") %>%
-  mutate(Blank.Reference = mean(Area, na.rm = TRUE)) %>%
-  mutate(blank.Flag = ifelse((Area / Blank.Reference) < blk.thresh, "blank.Flag", NA)) %>%
+  group_by(Precursor.Ion.Name) %>%
+  mutate(Blank.Reference = Area * blk.thresh) %>%
+  mutate(blank.Flag = ifelse((Area * blk.thresh) < Blank.max, "blank.Flag", NA)) %>%
   select(Replicate.Name:RT.Flag, blank.Flag)
+
 
 # Height Flags  ---------------------------------------
 # Add a height.min.flag if the Height falls below the min.height
