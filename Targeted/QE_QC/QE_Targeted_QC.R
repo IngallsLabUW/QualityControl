@@ -136,7 +136,9 @@ CreateBlankFlags <- function(skyline.output, blank.matcher) {
     rename(Blank.Name = Replicate.Name,
            Blank.Area = Area) %>%
     select(Blank.Name, Mass.Feature, Blank.Area) %>%
-    left_join(blank.matcher) %>% select(-Blank.Name)
+    left_join(blank.matcher) %>% select(-Blank.Name) %>%
+    arrange(desc(Blank.Area)) %>%
+    group_by(Precursor.Ion.Name, Replicate.Name) %>% filter(row_number() ==1)
   
   return(blank.flags)
 }
