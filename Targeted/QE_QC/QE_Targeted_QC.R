@@ -33,6 +33,26 @@ PromptForStdTags <- function() {
     std.tags <- list.append(std.tags, tag)
   }
 }
+CheckBlankMatcher <- function(blank.matcher) {
+  # Takes a blank matcher file and separates any multi-value variable
+  # columns into their own row.
+  #
+  # Args:
+  #   blank.matcher: CSV entered by user to match samples with 
+  #   appropriate blanks.
+  #
+  # Returns:
+  #   blank.matcher: new CSV with any duplicate values separated
+  #   into their own rows.
+  #
+  blank.matcher <- do.call("rbind", Map(data.frame, 
+    Blank.Name=strsplit(as.character(blank.matcher$Blank.Name), ","), 
+    Replicate.Name=(blank.matcher$Replicate.Name))
+  )
+  blank.matcher <- blank.matcher[c(2, 1)]
+  
+  return(blank.matcher)
+}
 TransformVariables <- function(skyline.output) {
   # Transforms variable classes and renames troublesome columns. 
   # Prints variables classes before and after to ensure success.
@@ -93,7 +113,7 @@ CreateFirstFlags <- function(skyline.output, area.min, SN.min, ppm.flex) {
   #   parts per million, and minimum area.
   #
   first.flags <- skyline.output %>%
-    filter(Replicate.Name %in% blank.matcher$Replicate.Name) %>%
+    filter(Replicate.Name %in% checked.blanks$Replicate.Name) %>%
     mutate(SN.Flag       = ifelse(((Area / Background) < SN.min), "SN.Flag", NA)) %>%
     mutate(ppm.Flag      = ifelse(abs(Mass.Error.PPM) > ppm.flex, "ppm.Flag", NA)) %>%
     mutate(area.min.Flag = ifelse((Area < area.min), "area.min.Flag", NA))
@@ -120,28 +140,31 @@ CreateRTFlags <- function(skyline.output, std.tags) {
   
   return(retention.time.flags)
 }
-CreateBlankFlags <- function(skyline.output, blank.matcher) {
+CreateBlankFlags <- function(skyline.output, checked.blanks) {
   # Creates a dataset with blank flags.
   #
   # Args
   #   skyline.output: Output file from machine to be modified.
-  #   blank.matcher: File with matches which samples go with which blanks.
+  #   checked.blanks: File with matches which samples go with which blanks.
   #
   # Returns
   #   Dataset containing columns of flags marking which replicates 
   #   are blanks.
   #
   blank.flags <- skyline.output %>%
-    filter(Replicate.Name %in% blank.matcher$Blank.Name) %>%
+    filter(Replicate.Name %in% checked.blanks$Blank.Name) %>%
     rename(Blank.Name = Replicate.Name,
            Blank.Area = Area) %>%
     select(Blank.Name, Mass.Feature, Blank.Area) %>%
-    left_join(blank.matcher) %>% select(-Blank.Name) %>%
+    left_join(checked.blanks, by = "Blank.Name") %>% 
+    select(-Blank.Name) %>%
     arrange(desc(Blank.Area)) %>%
-    group_by(Precursor.Ion.Name, Replicate.Name) %>% filter(row_number() ==1)
+    group_by(Mass.Feature, Replicate.Name) %>% 
+    filter(row_number() == 1)
   
   return(blank.flags)
 }
+
 
 ## Processing----------------------------------------------
 
@@ -182,6 +205,10 @@ printed.tags <- toString(std.tags)
 cat("Your tags for sample matching are:", printed.tags, "\n")
 PromptToContinue()
 
+# Reorder blank matcher csv to ensure there is one value per variable.
+#testing <- read.csv("./Targeted/QE_QC/datafiles/Samps_with_Blanks2.csv", header = TRUE)
+checked.blanks <- CheckBlankMatcher(blank.matcher)
+
 # Drop unnecessary colums, transform and rename variables as needed.
 skyline.columns.dropped <- skyline.output %>%
   select(-Protein.Name, -Protein) 
@@ -191,7 +218,7 @@ skyline.runtypes.identified <- IdentifyRunTypes(skyline.output)
 # Create datasets for different flag types.
 SNPPMAM.flags <- CreateFirstFlags(skyline.classes.transformed, area.min, SN.min, ppm.flex)
 RT.flags      <- CreateRTFlags(skyline.classes.transformed, std.tags)
-blank.flags   <- CreateBlankFlags(skyline.classes.transformed, blank.matcher)
+blank.flags   <- CreateBlankFlags(skyline.classes.transformed, checked.blanks)
 
 # Joining datasets---------------------------------------
 
@@ -223,7 +250,7 @@ if (any(Stds.test == TRUE)) {
   print("No standards exist in this set.")
 }
 
-# Print to file with comments and new name!`    `
+# Print to file with comments and new name!
 con <- file(paste("QEQC_", input.file, sep = ""), open = "wt")
 writeLines(paste("Hello! Welcome to the world of QE Quality Control! ",
                  "Minimum area for a real peak: ", area.min, ". ",
