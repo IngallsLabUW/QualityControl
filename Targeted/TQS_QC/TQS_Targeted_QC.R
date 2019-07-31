@@ -70,11 +70,12 @@ CheckStdFragments <- function(areas.transformed) {
     mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
     mutate(QT.Five.Percent = ifelse((Two.Fragments == TRUE & Quan.Trace == TRUE), 0.05 * Product.Mz, NA)) %>%
     mutate(Significant.Size = QT.Five.Percent < Product.Mz) %>%
-    mutate(Std.Type = str_match(Replicate.Name, "\\d+_\\w+_(\\w+_\\d+)")[,2]) %>%
+    mutate(Std.Type = Replicate.Name) %>%
+    #mutate(Std.Type = str_match(Replicate.Name, "\\d+_\\w+_(\\w+_\\d+)")[, 2]) %>%
     group_by(Std.Type, Precursor.Ion.Name, Product.Mz) %>% 
     summarise_all(first) %>% 
     arrange(Precursor.Ion.Name) %>%
-    select(Std.Type, Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Area, Two.Fragments: Significant.Size)
+    select(Std.Type, Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Area, Two.Fragments:Significant.Size)
   
   return(fragments.checked)
 }
@@ -93,7 +94,7 @@ CheckSmpFragments <- function(areas.transformed) {
   #
   # Returns:
   #   all.samples.IR: Modified data frame with added columns reflecting the above tests.
-  unique.smp.frags <-unique(all.samples %>% select(Precursor.Ion.Name, Precursor.Mz, Product.Mz))
+  unique.smp.frags <- unique(all.samples %>% select(Precursor.Ion.Name, Precursor.Mz, Product.Mz))
   
   unique.smp.frags2 <- unique.smp.frags %>%
     count(Precursor.Ion.Name) %>%
@@ -117,9 +118,9 @@ CheckSmpFragments <- function(areas.transformed) {
 }
 
 # Import files - this import format will be changed when integrated with Shiny
-input_file <- "your.file.here"
-areas.raw  <- read.csv("your.file.here", row.names = NULL, header = TRUE) #%>% select(-X)
-master     <- read.csv("your.file.here") %>% rename(Second.Trace = X2nd.trace)
+input_file <- "./Targeted/TQS_QC/datafiles/HILIC_DielRePoo-AlanineSarcosine.csv"
+areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv", row.names = NULL, header = TRUE) #%>% select(-X)
+master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Summer2016.csv") %>% rename(Second.Trace = X2nd.trace)
 
 # Set the parameters for the QC
 max.height <- 1.0e8
@@ -147,6 +148,7 @@ IR.Table <- CheckStdFragments(areas.transformed) %>%
   mutate(IR.max = max(Std.IR.Ratio, na.rm = TRUE)) %>%
   select(Precursor.Ion.Name, IR.min, IR.max) %>%
   unique()
+
 
 # Retention Time Table ----------------------------------------------------
 # Find the minimum and maximum Retention Times and take the average.
