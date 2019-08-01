@@ -271,6 +271,20 @@ if (any(Stds.test == TRUE)) {
   print("No standards exist in this set.")
 }
 
+# Blanks addition  ---------------------------------------
+# Add blanks to the bottom of the final table.
+
+Blk.test <- grepl("_Blk_", areas.raw$Replicate.Name)
+
+if (any(Blk.test == TRUE)) {
+  print("There are blanks in this run. Joining blank samples to the bottom of the dataset!", quote = FALSE)
+  blanks <- areas.transformed[grep("Blk", areas.transformed$Replicate.Name), ]
+  final.table <- rbind.fill(final.table, blanks)
+  final.table <- final.table %>% select(-X)
+} else {
+  print("No blanks exist in this set.")
+}
+
 # Rename and save  ---------------------------------------
 # Add comments restating the given QC parameters. Save to 
 # current working directory with a new name, 
