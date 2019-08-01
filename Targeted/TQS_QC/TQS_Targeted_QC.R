@@ -205,7 +205,7 @@ all.samples <- areas.transformed %>%
 IR.flags.added <- CheckSmpFragments(areas.transformed) %>%
   left_join(IR.Table, by = "Precursor.Ion.Name") %>%
   mutate(IR.Flag = ifelse((IR.Ratio < (IR.min - IR.flex) & IR.Ratio > (IR.max + IR.flex)), "IR.Flag", NA)) %>%
-  select(Replicate.Name:Area, IR.Flag)
+  select(Replicate.Name:Area, Quan.Trace:Second.Trace, IR.Flag)
 
 # Retention Time Flags  ---------------------------------------
 # If the Retention Time is "RT.flex" further away from the RT.Reference 
@@ -214,7 +214,7 @@ RT.flags.added <- IR.flags.added %>%
   merge(y = all.samples, all.x = TRUE) %>%
   left_join(RT.Range.Table, by = "Precursor.Ion.Name") %>%
   mutate(RT.Flag = ifelse((abs(Retention.Time - RT.Reference) > RT.flex), "RT.Flag", NA)) %>%
-  select(Replicate.Name:Area, IR.Flag, RT.Flag) %>%
+  select(Replicate.Name:Area, Quan.Trace:Second.Trace, IR.Flag, RT.Flag) %>%
   arrange(Precursor.Ion.Name, Product.Mz)
 
 # Blank Flags  ---------------------------------------
@@ -256,6 +256,13 @@ SN.flags.added <- Area.flags.added %>%
 final.table <- SN.flags.added %>%
   mutate(all.Flags = paste(IR.Flag, RT.Flag, blank.Flag, height.min.Flag, overloaded.Flag, area.min.Flag, SN.Flag, sep = ", ")) %>%
   mutate(all.Flags = as.character(all.Flags %>% str_remove_all("NA, ") %>%  str_remove_all("NA")))
+
+# Remove Secondary trace ---------------------------------------
+# Filter rows where Second.Trace == TRUE, keeping only Quan.Trace.
+# Remove columns once finished.
+final.table <- final.table %>%
+  filter(Quan.Trace == TRUE) %>%
+  select(-Quan.Trace, -Second.Trace)
 
 
 # Standards addition  ---------------------------------------
