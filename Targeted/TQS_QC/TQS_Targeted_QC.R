@@ -71,7 +71,6 @@ CheckStdFragments <- function(areas.transformed) {
     mutate(QT.Five.Percent = ifelse((Two.Fragments == TRUE & Quan.Trace == TRUE), 0.05 * Product.Mz, NA)) %>%
     mutate(Significant.Size = QT.Five.Percent < Product.Mz) %>%
     mutate(Std.Type = Replicate.Name) %>%
-    #mutate(Std.Type = str_match(Replicate.Name, "\\d+_\\w+_(\\w+_\\d+)")[, 2]) %>%
     group_by(Std.Type, Precursor.Ion.Name, Product.Mz) %>% 
     summarise_all(first) %>% 
     arrange(Precursor.Ion.Name) %>%
@@ -118,9 +117,9 @@ CheckSmpFragments <- function(areas.transformed) {
 }
 
 # Import files - this import format will be changed when integrated with Shiny
-input_file <- "./Targeted/TQS_QC/datafiles/HILIC_DielRePoo-AlanineSarcosine.csv"
-areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv", row.names = NULL, header = TRUE) #%>% select(-X)
-master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Summer2016.csv") %>% rename(Second.Trace = X2nd.trace)
+input_file <- "your file here"
+areas.raw  <- read.csv("your file here", row.names = NULL, header = TRUE) #%>% select(-X)
+master     <- read.csv("your file here") %>% rename(Second.Trace = X2nd.trace)
 
 # Set the parameters for the QC
 max.height <- 1.0e8
@@ -130,6 +129,10 @@ RT.flex    <- 0.4
 IR.flex    <- 0.3
 blk.thresh <- 0.3
 SN.min     <- 4
+
+std.tags <- c("160802_Std_StdsInDiatomMatrix_1", "160802_Std_StdsInDiatomMatrix_2", "160802_Std_StdsInWater_5")
+
+  
 
 # ID run types
 run.type <- tolower(str_extract(areas.raw$Replicate.Name, "(?<=_)[^_]+(?=_)"))
@@ -141,6 +144,7 @@ areas.transformed <- TransformVariables(areas.raw)
 # Find Ion Ratio by dividing the area of the quantitative trace by the area of the secondary trace. 
 # Find the minimum and maximum IR to create reference table of IR ranges.
 IR.Table <- CheckStdFragments(areas.transformed) %>%
+  filter(Replicate.Name %in% std.tags) %>%
   group_by(Precursor.Ion.Name, Std.Type) %>%
   mutate(Std.IR.Ratio = ifelse(TRUE %in% Significant.Size, (Area[Quan.Trace == TRUE] / Area[Second.Trace == TRUE]), NA)) %>%
   group_by(Precursor.Ion.Name) %>%
