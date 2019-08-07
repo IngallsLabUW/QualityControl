@@ -272,13 +272,13 @@ final.table <- final.table %>%
 # Standards addition  ---------------------------------------
 # Ensure there are standards in the run. Add those standards
 # back into the final table.
-Stds.test <- grepl("_Std_", areas.raw$Replicate.Name)
+Stds.test <- grepl("_Std_|_Blk_", areas.raw$Replicate.Name)
 
 if (any(Stds.test == TRUE)) {
-  print("There are standards in this run. Joining standard samples to the bottom of the dataset!", quote = FALSE)
+  print("There are standards and/or blanks in this run. Joining to the bottom of the dataset!", quote = FALSE)
   ##
   standards <- areas.transformed %>%
-    filter(Sample.Type == "std") %>%
+    filter(Sample.Type == "std" | Sample.Type == "blk") %>%
     merge(y = master,
           by.x = c("Precursor.Ion.Name", "Product.Mz"),
           by.y = c("Compound.Name", "Daughter"),
@@ -287,25 +287,9 @@ if (any(Stds.test == TRUE)) {
     mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
     filter(Quan.Trace == TRUE) %>%
     select(Replicate.Name:Sample.Type) 
-    
-  ##
   final.table <- rbind.fill(final.table, standards)
 } else {
-  print("No standards exist in this set.")
-}
-
-# Blanks addition  ---------------------------------------
-# Add blanks to the bottom of the final table.
-
-Blk.test <- grepl("_Blk_", areas.raw$Replicate.Name)
-
-if (any(Blk.test == TRUE)) {
-  print("There are blanks in this run. Joining blank samples to the bottom of the dataset!", quote = FALSE)
-  blanks <- areas.transformed[grep("Blk", areas.transformed$Replicate.Name), ]
-  final.table <- rbind.fill(final.table, blanks)
-  final.table <- final.table %>% select(-X)
-} else {
-  print("No blanks exist in this set.")
+  print("No blanks and or standards exist in this set.")
 }
 
 # Rename and save  ---------------------------------------
