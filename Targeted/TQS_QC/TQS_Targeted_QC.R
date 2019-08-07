@@ -117,9 +117,9 @@ CheckSmpFragments <- function(areas.transformed) {
 }
 
 # Import files - this import format will be changed when integrated with Shiny
-input_file <- "your file here"
-areas.raw  <- read.csv("your file here", row.names = NULL, header = TRUE) #%>% select(-X)
-master     <- read.csv("your file here") %>% rename(Second.Trace = X2nd.trace)
+input_file <- "./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv"
+areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv", row.names = NULL, header = TRUE) #%>% select(-X)
+master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Example.csv") %>% rename(Second.Trace = X2nd.trace)
 
 # Set the parameters for the QC
 max.height <- 1.0e8
@@ -276,7 +276,19 @@ Stds.test <- grepl("_Std_", areas.raw$Replicate.Name)
 
 if (any(Stds.test == TRUE)) {
   print("There are standards in this run. Joining standard samples to the bottom of the dataset!", quote = FALSE)
-  standards <- areas.transformed[grep("Std", areas.transformed$Replicate.Name), ]
+  ##
+  standards <- areas.transformed %>%
+    filter(Sample.Type == "std") %>%
+    merge(y = master,
+          by.x = c("Precursor.Ion.Name", "Product.Mz"),
+          by.y = c("Compound.Name", "Daughter"),
+          all.x = TRUE) %>%
+    mutate(Second.Trace = ifelse(Second.Trace == "", FALSE, TRUE)) %>%
+    mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
+    filter(Quan.Trace == TRUE) %>%
+    select(Replicate.Name:Sample.Type) 
+    
+  ##
   final.table <- rbind.fill(final.table, standards)
 } else {
   print("No standards exist in this set.")
