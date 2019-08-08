@@ -117,9 +117,9 @@ CheckSmpFragments <- function(areas.transformed) {
 }
 
 # Import files - this import format will be changed when integrated with Shiny
-input_file <- "./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv"
-areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ExampleSkylineOutput_TQS.csv", row.names = NULL, header = TRUE) #%>% select(-X)
-master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Example.csv") %>% rename(Second.Trace = X2nd.trace)
+input_file <- "./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv"
+areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv", row.names = NULL, header = TRUE) #%>% select(-X)
+master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_TQS_GBT_MasterList.csv") %>% rename(Second.Trace = X2nd.trace)
 
 # Set the parameters for the QC
 max.height <- 1.0e8
@@ -130,8 +130,8 @@ IR.flex    <- 0.3
 blk.thresh <- 0.3
 SN.min     <- 4
 
-std.tags <- c("160802_Std_StdsInDiatomMatrix_1", "160802_Std_StdsInDiatomMatrix_2", "160802_Std_StdsInWater_5")
-
+#std.tags <- c("160802_Std_StdsInDiatomMatrix_1", "160802_Std_StdsInDiatomMatrix_2", "160802_Std_StdsInWater_5")
+std.tags <- c()
   
 
 # ID run types
@@ -144,8 +144,8 @@ areas.transformed <- TransformVariables(areas.raw)
 # Find Ion Ratio by dividing the area of the quantitative trace by the area of the secondary trace. 
 # Find the minimum and maximum IR to create reference table of IR ranges.
 IR.Table <- CheckStdFragments(areas.transformed) %>%
-  filter(Replicate.Name %in% std.tags) %>%
-  group_by(Precursor.Ion.Name, Std.Type) %>%
+  #filter(Replicate.Name %in% std.tags) %>%
+  group_by(Precursor.Ion.Name) %>%
   mutate(Std.IR.Ratio = ifelse(TRUE %in% Significant.Size, (Area[Quan.Trace == TRUE] / Area[Second.Trace == TRUE]), NA)) %>%
   group_by(Precursor.Ion.Name) %>%
   mutate(IR.min = min(Std.IR.Ratio, na.rm = TRUE)) %>%
@@ -171,8 +171,16 @@ RT.Range.Table <- areas.transformed %>%
 # Isolate the blanks in the sample and add a column 
 # with maximum blank for each Precursor ion name.
 Blank.Table <- areas.transformed %>%
-  select(Precursor.Ion.Name, Area, Sample.Type) %>%
+  ##
+  merge(y = master,
+        by.x = c("Precursor.Ion.Name", "Product.Mz"),
+        by.y = c("Compound.Name", "Daughter"),
+        all.x = TRUE) %>%
+  mutate(Second.Trace = ifelse(Second.Trace == "", FALSE, TRUE)) %>%
+  mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
   filter(Sample.Type == "blk") %>%
+  filter(Quan.Trace == TRUE) %>%
+  select(Precursor.Ion.Name, Replicate.Name, Area, Sample.Type) %>%
   group_by(Precursor.Ion.Name) %>%
   mutate(Blank.max = max(Area, na.rm = TRUE)) %>%
   select(-Area) %>%
@@ -195,8 +203,16 @@ Area.Table <- areas.transformed %>%
 # Isolate all pooled and sample runs. Find the Signal to Noise
 # by dividing the Background of each run by its Area.
 SN.Table <- areas.transformed %>%
-  select(Replicate.Name, Sample.Type, Precursor.Ion.Name, Area, Background) %>%
+  ##
+  merge(y = master,
+        by.x = c("Precursor.Ion.Name", "Product.Mz"),
+        by.y = c("Compound.Name", "Daughter"),
+        all.x = TRUE) %>%
+  mutate(Second.Trace = ifelse(Second.Trace == "", FALSE, TRUE)) %>%
+  mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
   filter(Sample.Type %in% c("smp", "poo")) %>%
+  filter(Quan.Trace == TRUE) %>%
+  select(Replicate.Name, Sample.Type, Precursor.Ion.Name, Area, Background) %>%
   mutate(Signal.to.Noise = (Area / Background)) 
 
 # Construct final output of sample and pooled runs.
@@ -217,7 +233,7 @@ IR.flags.added <- CheckSmpFragments(areas.transformed) %>%
 RT.flags.added <- IR.flags.added %>%
   merge(y = all.samples, all.x = TRUE) %>%
   left_join(RT.Range.Table, by = "Precursor.Ion.Name") %>%
-  mutate(RT.Flag = ifelse((abs(Retention.Time - RT.Reference) > RT.flex), "RT.Flag", NA)) %>%
+  mutate(RT.Flag = ifelse(between(Retention.Time, (RT.min - RT.flex), (RT.max + RT.flex)), NA, "RT.Flag")) %>%
   select(Replicate.Name:Area, Quan.Trace:Second.Trace, IR.Flag, RT.Flag) %>%
   arrange(Precursor.Ion.Name, Product.Mz)
 
