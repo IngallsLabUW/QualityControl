@@ -106,7 +106,7 @@ CheckSmpFragments <- function(areas.transformed) {
           by.x = c("Precursor.Ion.Name", "Product.Mz"),
           by.y = c("Compound.Name", "Daughter"),
           all.x = TRUE) %>%
-    select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Area, Two.Fragments, Quan.Trace, Second.Trace) %>%
+    select(Replicate.Name, Precursor.Ion.Name, Protein.Name, Precursor.Mz, Product.Mz, Area, Two.Fragments, Quan.Trace, Second.Trace) %>%
     mutate(Second.Trace = ifelse(Second.Trace == "", FALSE, TRUE)) %>%
     mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
     mutate(QT.Five.Percent = ifelse((Two.Fragments == TRUE & Quan.Trace == TRUE), 0.05 * Product.Mz, NA)) %>%
@@ -145,8 +145,8 @@ areas.transformed <- TransformVariables(areas.raw)
 # Find the minimum and maximum IR to create reference table of IR ranges.
 IR.Table <- CheckStdFragments(areas.transformed) %>%
   #filter(Replicate.Name %in% std.tags) %>%
-  group_by(Precursor.Ion.Name) %>%
-  mutate(Std.IR.Ratio = ifelse(TRUE %in% Significant.Size, (Area[Quan.Trace == TRUE] / Area[Second.Trace == TRUE]), NA)) %>%
+  group_by(Precursor.Ion.Name, Replicate.Name) %>%
+  mutate(Std.IR.Ratio = ifelse(Quan.Trace == TRUE, (Area[Quan.Trace == TRUE]) / (Area[Second.Trace == TRUE]), NA)) %>%
   group_by(Precursor.Ion.Name) %>%
   mutate(IR.min = min(Std.IR.Ratio, na.rm = TRUE)) %>%
   mutate(IR.max = max(Std.IR.Ratio, na.rm = TRUE)) %>%
@@ -171,7 +171,6 @@ RT.Range.Table <- areas.transformed %>%
 # Isolate the blanks in the sample and add a column 
 # with maximum blank for each Precursor ion name.
 Blank.Table <- areas.transformed %>%
-  ##
   merge(y = master,
         by.x = c("Precursor.Ion.Name", "Product.Mz"),
         by.y = c("Compound.Name", "Daughter"),
@@ -229,7 +228,7 @@ IR.flags.added <- CheckSmpFragments(areas.transformed) %>%
 
 # Retention Time Flags  ---------------------------------------
 # If the Retention Time is "RT.flex" further away from the RT.Reference 
-# value from the RT.Range Table, add a flag. 
+# Range from the RT.Range Table, add a flag. 
 RT.flags.added <- IR.flags.added %>%
   merge(y = all.samples, all.x = TRUE) %>%
   left_join(RT.Range.Table, by = "Precursor.Ion.Name") %>%
@@ -241,10 +240,10 @@ RT.flags.added <- IR.flags.added %>%
 # If the Area divided by the Blank.Reference value is
 # greater than the set blk.thresh value, add a flag.
 Blank.flags.added <- RT.flags.added %>%
-  left_join(Blank.Table, by = "Precursor.Ion.Name") %>%
+  left_join(select(Blank.Table, Blank.max, Precursor.Ion.Name), by = "Precursor.Ion.Name") %>%
   group_by(Precursor.Ion.Name) %>%
   mutate(Blank.Reference = Area * blk.thresh) %>%
-  mutate(blank.Flag = ifelse((Area * blk.thresh) < Blank.max, "blank.Flag", NA)) %>%
+  mutate(blank.Flag = ifelse(((Protein.Name != "Internal Std") & (Area * blk.thresh) < Blank.max), "blank.Flag", NA)) %>%
   select(Replicate.Name:RT.Flag, blank.Flag)
 
 
