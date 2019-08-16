@@ -46,8 +46,8 @@ CheckBlankMatcher <- function(blank.matcher) {
   #   into their own rows.
   #
   blank.matcher <- do.call("rbind", Map(data.frame, 
-    Blank.Name=strsplit(as.character(blank.matcher$Blank.Name), ","), 
-    Replicate.Name=(blank.matcher$Replicate.Name))
+    Blank.Name = strsplit(as.character(blank.matcher$Blank.Name), ","), 
+    Replicate.Name = (blank.matcher$Replicate.Name))
   )
   blank.matcher <- blank.matcher[c(2, 1)]
   
@@ -83,7 +83,7 @@ TransformVariables <- function(skyline.output) {
   return(skyline.output)
 }
 IdentifyRunTypes <- function(skyline.output) {
-  # Identify run types and return each unique value present in the Skyline output.
+  # Identify run typfes and return each unique value present in the Skyline output.
   #
   # Args
   #   skyline.output: Raw output file from Skyline.
@@ -233,7 +233,7 @@ second.join <- first.join %>%
   left_join(blank.flags) %>%
   mutate(blank.Flag = ifelse((Area / Blank.Area) < blank.ratio.max, "blank.Flag", NA))
 
-# Finally, combine all the flags and throw out any peak with a flag.
+# Finally, combine all the flags.
 last.join <- second.join %>%
   mutate(all.Flags      = paste(SN.Flag, ppm.Flag, area.min.Flag, RT.Flag, blank.Flag, sep = ", ")) %>%
   mutate(all.Flags      = as.character(all.Flags %>% str_remove_all("NA, ") %>%  str_remove_all("NA"))) %>%
@@ -250,6 +250,7 @@ if (any(Stds.test == TRUE)) {
   print("No standards exist in this set.")
 }
 
+
 # Print to file with comments and new name!
 con <- file(paste("QEQC_", input.file, sep = ""), open = "wt")
 writeLines(paste("Hello! Welcome to the world of QE Quality Control! ",
@@ -264,3 +265,5 @@ writeLines(paste("Hello! Welcome to the world of QE Quality Control! ",
                  sep = ""), con)
 write.csv(last.join, con, row.names = FALSE)
 close(con)
+
+
