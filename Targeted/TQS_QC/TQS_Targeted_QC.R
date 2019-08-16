@@ -1,5 +1,6 @@
 library(plyr)
 library(reshape2)
+library(stringr)
 library(tidyverse)
 options(scipen=999)
 
@@ -70,11 +71,10 @@ CheckStdFragments <- function(areas.transformed) {
     mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
     mutate(QT.Five.Percent = ifelse((Two.Fragments == TRUE & Quan.Trace == TRUE), 0.05 * Product.Mz, NA)) %>%
     mutate(Significant.Size = QT.Five.Percent < Product.Mz) %>%
-    mutate(Std.Type = Replicate.Name) %>%
-    group_by(Std.Type, Precursor.Ion.Name, Product.Mz) %>% 
+    group_by(Replicate.Name, Precursor.Ion.Name, Product.Mz) %>% 
     summarise_all(first) %>% 
     arrange(Precursor.Ion.Name) %>%
-    select(Std.Type, Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Area, Two.Fragments:Significant.Size)
+    select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Area, Two.Fragments:Significant.Size)
   
   return(fragments.checked)
 }
@@ -132,7 +132,7 @@ SN.min     <- 4
 
 #std.tags <- c("160802_Std_StdsInDiatomMatrix_1", "160802_Std_StdsInDiatomMatrix_2", "160802_Std_StdsInWater_5")
 std.tags <- c()
-  
+standard.pattern <- "Glycine Betaine"
 
 # ID run types
 run.type <- tolower(str_extract(areas.raw$Replicate.Name, "(?<=_)[^_]+(?=_)"))
@@ -145,9 +145,15 @@ areas.transformed <- TransformVariables(areas.raw)
 # Find the minimum and maximum IR to create reference table of IR ranges.
 IR.Table <- CheckStdFragments(areas.transformed) %>%
   #filter(Replicate.Name %in% std.tags) %>%
+  mutate(Std.Type = sapply(strsplit(Replicate.Name, "_"), "[[", 3)) %>%
   group_by(Precursor.Ion.Name, Replicate.Name) %>%
   mutate(Std.IR.Ratio = ifelse(Quan.Trace == TRUE, (Area[Quan.Trace == TRUE]) / (Area[Second.Trace == TRUE]), NA)) %>%
+  mutate(HasGBT = ifelse((standard.pattern %in% str_extract(Precursor.Ion.Name, standard.pattern)), TRUE, FALSE)) %>%
   group_by(Precursor.Ion.Name) %>%
+  ##
+  mutate(IR.min = ifelse(HasGBT == TRUE, min(filter(!Std.Type == "StdMix1InWater"), na.rm = TRUE), min(filter(Std.Type == "StdMix1InWater"), na.rm = TRUE)))
+
+  ##
   mutate(IR.min = min(Std.IR.Ratio, na.rm = TRUE)) %>%
   mutate(IR.max = max(Std.IR.Ratio, na.rm = TRUE)) %>%
   select(Precursor.Ion.Name, IR.min, IR.max) %>%
