@@ -62,11 +62,12 @@ CheckStdFragments <- function(areas.transformed) {
   
   fragments.checked <- fragment.check %>%
     left_join(fragment.multi.unique, by = "Precursor.Ion.Name" ) %>%
+    left_join(standard.types, by = "Replicate.Name") %>%
     merge(y = master,
           by.x = c("Precursor.Ion.Name", "Product.Mz"),
           by.y = c("Compound.Name", "Daughter"),
           all.x = TRUE) %>%
-    select(Replicate.Name, Precursor.Ion.Name, Area, Precursor.Mz, Product.Mz, Two.Fragments, Quan.Trace, Second.Trace) %>%
+    select(Replicate.Name, Std.Type, Precursor.Ion.Name, Area, Precursor.Mz, Product.Mz, Two.Fragments, Quan.Trace, Second.Trace) %>%
     mutate(Second.Trace = ifelse(Second.Trace == "", FALSE, TRUE)) %>%
     mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
     mutate(QT.Five.Percent = ifelse((Two.Fragments == TRUE & Quan.Trace == TRUE), 0.05 * Product.Mz, NA)) %>%
@@ -74,7 +75,7 @@ CheckStdFragments <- function(areas.transformed) {
     group_by(Replicate.Name, Precursor.Ion.Name, Product.Mz) %>% 
     summarise_all(first) %>% 
     arrange(Precursor.Ion.Name) %>%
-    select(Replicate.Name, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Area, Two.Fragments:Significant.Size)
+    select(Replicate.Name, Std.Type, Precursor.Ion.Name, Precursor.Mz, Product.Mz, Area, Two.Fragments:Significant.Size)
   
   return(fragments.checked)
 }
@@ -120,6 +121,10 @@ CheckSmpFragments <- function(areas.transformed) {
 input_file <- "./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv"
 areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv", row.names = NULL, header = TRUE) #%>% select(-X)
 master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_TQS_GBT_MasterList.csv") %>% rename(Second.Trace = X2nd.trace)
+standard.types <- read.csv("./Targeted/TQS_QC/datafiles/GBT_filter.csv") %>%
+  mutate(Replicate.Name     = suppressWarnings(as.character(Replicate.Name))) %>%
+  mutate(Std.Type = suppressWarnings(as.character(Std.Type)))
+  
 
 # Set the parameters for the QC
 max.height <- 1.0e8
@@ -144,18 +149,19 @@ areas.transformed <- TransformVariables(areas.raw)
 # Find Ion Ratio by dividing the area of the quantitative trace by the area of the secondary trace. 
 # Find the minimum and maximum IR to create reference table of IR ranges.
 IR.Table <- CheckStdFragments(areas.transformed) %>%
-  #filter(Replicate.Name %in% std.tags) %>%
-  mutate(Std.Type = sapply(strsplit(Replicate.Name, "_"), "[[", 3)) %>%
+  # filter(Replicate.Name %in% std.tags) %>%
+  # mutate(Std.Type = sapply(strsplit(Replicate.Name, "_"), "[[", 3)) %>%
   group_by(Precursor.Ion.Name, Replicate.Name) %>%
-  mutate(Std.IR.Ratio = ifelse(Quan.Trace == TRUE, (Area[Quan.Trace == TRUE]) / (Area[Second.Trace == TRUE]), NA)) %>%
+  mutate(Std.Ion.Ratio = ifelse(Quan.Trace == TRUE, (Area[Quan.Trace == TRUE]) / (Area[Second.Trace == TRUE]), NA)) %>%
   mutate(HasGBT = ifelse((standard.pattern %in% str_extract(Precursor.Ion.Name, standard.pattern)), TRUE, FALSE)) %>%
   group_by(Precursor.Ion.Name) %>%
   ##
-  mutate(IR.min = ifelse(HasGBT == TRUE, min(filter(!Std.Type == "StdMix1InWater"), na.rm = TRUE), min(filter(Std.Type == "StdMix1InWater"), na.rm = TRUE)))
+  mutate(IR.min = ifelse(HasGBT == TRUE, min(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE), min(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE))) %>%
+  mutate(IR.max = ifelse(HasGBT == TRUE, max(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE), max(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE))) %>%
 
   ##
-  mutate(IR.min = min(Std.IR.Ratio, na.rm = TRUE)) %>%
-  mutate(IR.max = max(Std.IR.Ratio, na.rm = TRUE)) %>%
+  # mutate(IR.min = min(Std.Ion.Ratio, na.rm = TRUE)) %>%
+  # mutate(IR.max = max(Std.Ion.Ratio, na.rm = TRUE)) %>%
   select(Precursor.Ion.Name, IR.min, IR.max) %>%
   unique()
 
