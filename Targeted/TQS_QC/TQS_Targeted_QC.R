@@ -135,9 +135,8 @@ IR.flex    <- 0.3
 blk.thresh <- 0.3
 SN.min     <- 4
 
-#std.tags <- c("160802_Std_StdsInDiatomMatrix_1", "160802_Std_StdsInDiatomMatrix_2", "160802_Std_StdsInWater_5")
 std.tags <- c()
-standard.pattern <- "Glycine Betaine"
+standard.pattern <- "Glycine Betaine" # or custom pattern without the standard types csv.
 
 # ID run types
 run.type <- tolower(str_extract(areas.raw$Replicate.Name, "(?<=_)[^_]+(?=_)"))
@@ -150,18 +149,14 @@ areas.transformed <- TransformVariables(areas.raw)
 # Find the minimum and maximum IR to create reference table of IR ranges.
 IR.Table <- CheckStdFragments(areas.transformed) %>%
   # filter(Replicate.Name %in% std.tags) %>%
-  # mutate(Std.Type = sapply(strsplit(Replicate.Name, "_"), "[[", 3)) %>%
+  mutate(Std.Type2 = sapply(strsplit(Replicate.Name, "_"), "[[", 3)) %>% # An optional way to isolate the mix type, if naming conventions are consistent.
   group_by(Precursor.Ion.Name, Replicate.Name) %>%
   mutate(Std.Ion.Ratio = ifelse(Quan.Trace == TRUE, (Area[Quan.Trace == TRUE]) / (Area[Second.Trace == TRUE]), NA)) %>%
-  mutate(HasGBT = ifelse((standard.pattern %in% str_extract(Precursor.Ion.Name, standard.pattern)), TRUE, FALSE)) %>%
+  mutate(Diff.Mix = ifelse((standard.pattern %in% str_extract(Precursor.Ion.Name, standard.pattern)), TRUE, FALSE)) %>%
   group_by(Precursor.Ion.Name) %>%
   ##
-  mutate(IR.min = ifelse(HasGBT == TRUE, min(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE), min(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE))) %>%
-  mutate(IR.max = ifelse(HasGBT == TRUE, max(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE), max(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE))) %>%
-
-  ##
-  # mutate(IR.min = min(Std.Ion.Ratio, na.rm = TRUE)) %>%
-  # mutate(IR.max = max(Std.Ion.Ratio, na.rm = TRUE)) %>%
+  mutate(IR.min = ifelse(Diff.Mix == TRUE, suppressWarnings(min(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE)), suppressWarnings(min(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE)))) %>%
+  mutate(IR.max = ifelse(Diff.Mix == TRUE, suppressWarnings(max(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE)), suppressWarnings(max(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE)))) %>%
   select(Precursor.Ion.Name, IR.min, IR.max) %>%
   unique()
 
@@ -296,9 +291,9 @@ final.table <- final.table %>%
   select(-Quan.Trace, -Second.Trace)
 
 
-# Standards addition  ---------------------------------------
-# Ensure there are standards in the run. Add those standards
-# back into the final table.
+# Standards & blank addition  ---------------------------------------
+# Test for standars and blanks in the run. Add those standards
+# and blanks back into the final table.
 Stds.test <- grepl("_Std_|_Blk_", areas.raw$Replicate.Name)
 
 if (any(Stds.test == TRUE)) {
