@@ -120,11 +120,11 @@ CheckSmpFragments <- function(areas.transformed) {
 # Import files - this import format will be changed when integrated with Shiny
 input_file <- "./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv"
 areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv", row.names = NULL, header = TRUE) #%>% select(-X)
-master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_TQS_GBT_MasterList.csv") %>% rename(Second.Trace = X2nd.trace)
+master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Summer2016.csv") %>% rename(Second.Trace = X2nd.trace)
 standard.types <- read.csv("./Targeted/TQS_QC/datafiles/GBT_filter.csv") %>%
-  mutate(Replicate.Name     = suppressWarnings(as.character(Replicate.Name))) %>%
-  mutate(Std.Type = suppressWarnings(as.character(Std.Type)))
-  
+  mutate(Replicate.Name = suppressWarnings(as.character(Replicate.Name))) %>%
+  mutate(Std.Type       = suppressWarnings(as.character(Std.Type)))
+
 
 # Set the parameters for the QC
 max.height <- 1.0e8
@@ -149,14 +149,15 @@ areas.transformed <- TransformVariables(areas.raw)
 # Find the minimum and maximum IR to create reference table of IR ranges.
 IR.Table <- CheckStdFragments(areas.transformed) %>%
   # filter(Replicate.Name %in% std.tags) %>%
-  mutate(Std.Type2 = sapply(strsplit(Replicate.Name, "_"), "[[", 3)) %>% # An optional way to isolate the mix type, if naming conventions are consistent.
+  # mutate(Std.Type2 = sapply(strsplit(Replicate.Name, "_"), "[[", 3)) %>% # An optional way to isolate the mix type, if naming conventions are consistent.
   group_by(Precursor.Ion.Name, Replicate.Name) %>%
   mutate(Std.Ion.Ratio = ifelse(Quan.Trace == TRUE, (Area[Quan.Trace == TRUE]) / (Area[Second.Trace == TRUE]), NA)) %>%
   mutate(Diff.Mix = ifelse((standard.pattern %in% str_extract(Precursor.Ion.Name, standard.pattern)), TRUE, FALSE)) %>%
   group_by(Precursor.Ion.Name) %>%
-  ##
-  mutate(IR.min = ifelse(Diff.Mix == TRUE, suppressWarnings(min(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE)), suppressWarnings(min(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE)))) %>%
-  mutate(IR.max = ifelse(Diff.Mix == TRUE, suppressWarnings(max(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE)), suppressWarnings(max(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE)))) %>%
+  #mutate(IR.min = ifelse(Diff.Mix == TRUE, suppressWarnings(min(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE)), suppressWarnings(min(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE)))) %>%
+  #mutate(IR.max = ifelse(Diff.Mix == TRUE, suppressWarnings(max(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE)), suppressWarnings(max(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE)))) %>%
+  mutate(IR.min = min(Std.Ion.Ratio, na.rm = TRUE)) %>%
+  mutate(IR.max = max(Std.Ion.Ratio, na.rm = TRUE)) %>%
   select(Precursor.Ion.Name, IR.min, IR.max) %>%
   unique()
 
@@ -223,7 +224,7 @@ SN.Table <- areas.transformed %>%
 
 # Construct final output of sample and pooled runs.
 all.samples <- areas.transformed %>%
-  filter(Sample.Type %in% c("smp", "poo")) 
+  filter(Sample.Type %in% c("smp", "poo"))
 
 # Ion Ratio Flags  ---------------------------------------
 # If the Ion Ratio falls outside of the IR.Table range +/- the
@@ -239,7 +240,7 @@ IR.flags.added <- CheckSmpFragments(areas.transformed) %>%
 RT.flags.added <- IR.flags.added %>%
   merge(y = all.samples, all.x = TRUE) %>%
   left_join(RT.Range.Table, by = "Precursor.Ion.Name") %>%
-  mutate(RT.Flag = ifelse(between(Retention.Time, (RT.min - RT.flex), (RT.max + RT.flex)), NA, "RT.Flag")) %>%
+  mutate(RT.Flag = ifelse((Retention.Time >= (RT.max + RT.flex) | Retention.Time <= (RT.min - RT.flex)), "RT.Flag", NA)) %>%
   select(Replicate.Name:Area, Quan.Trace:Second.Trace, IR.Flag, RT.Flag) %>%
   arrange(Precursor.Ion.Name, Product.Mz)
 
@@ -250,7 +251,10 @@ Blank.flags.added <- RT.flags.added %>%
   left_join(select(Blank.Table, Blank.max, Precursor.Ion.Name), by = "Precursor.Ion.Name") %>%
   group_by(Precursor.Ion.Name) %>%
   mutate(Blank.Reference = Area * blk.thresh) %>%
-  mutate(blank.Flag = ifelse(((Protein.Name != "Internal Std") & (Area * blk.thresh) < Blank.max), "blank.Flag", NA)) %>%
+  #mutate(blank.Flag = ifelse(((Protein.Name != "Internal Std") & (Area * blk.thresh) < Blank.max), "blank.Flag", NA)) %>%
+  mutate(blank.Flag = ifelse(((Protein.Name != "Internal Std") & (Area * blk.thresh) < Blank.max), 
+                             "blank.Flag", 
+                             ifelse(((Protein.Name == "Internal Std") & (Area * blk.thresh < Blank.max)), "IS.blank.Flag", NA))) %>%
   select(Replicate.Name:RT.Flag, blank.Flag)
 
 
@@ -294,13 +298,15 @@ final.table <- final.table %>%
 # Standards & blank addition  ---------------------------------------
 # Test for standars and blanks in the run. Add those standards
 # and blanks back into the final table.
-Stds.test <- grepl("_Std_|_Blk_", areas.raw$Replicate.Name)
+
+Stds.test <- grepl("_Std_", areas.raw$Replicate.Name)
+Blks.test <- grepl("_Blk_", areas.raw$Replicate.Name)
 
 if (any(Stds.test == TRUE)) {
-  print("There are standards and/or blanks in this run. Joining to the bottom of the dataset!", quote = FALSE)
+  print("There are standards in this run. Joining to the bottom of the dataset!", quote = FALSE)
   ##
   standards <- areas.transformed %>%
-    filter(Sample.Type == "std" | Sample.Type == "blk") %>%
+    filter(Sample.Type == "std") %>%
     merge(y = master,
           by.x = c("Precursor.Ion.Name", "Product.Mz"),
           by.y = c("Compound.Name", "Daughter"),
@@ -308,10 +314,28 @@ if (any(Stds.test == TRUE)) {
     mutate(Second.Trace = ifelse(Second.Trace == "", FALSE, TRUE)) %>%
     mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
     filter(Quan.Trace == TRUE) %>%
-    select(Replicate.Name:Sample.Type) 
+    select(Replicate.Name:Sample.Type)
   final.table <- rbind.fill(final.table, standards)
 } else {
-  print("No blanks and or standards exist in this set.")
+  print("No standards exist in this set.")
+}
+
+if (any(Blks.test == TRUE)) {
+  print("There are blanks in this run. Joining to the bottom of the dataset!", quote = FALSE)
+  ##
+  blanks <- areas.transformed %>%
+    filter(Sample.Type == "blk") %>%
+    merge(y = master,
+          by.x = c("Precursor.Ion.Name", "Product.Mz"),
+          by.y = c("Compound.Name", "Daughter"),
+          all.x = TRUE) %>%
+    mutate(Second.Trace = ifelse(Second.Trace == "", FALSE, TRUE)) %>%
+    mutate(Quan.Trace = ifelse(Quan.Trace == "no", FALSE, TRUE)) %>%
+    filter(Quan.Trace == TRUE) %>%
+    select(Replicate.Name:Sample.Type)
+  final.table <- rbind.fill(final.table, blanks)
+} else {
+  print("No blanks exist in this set.")
 }
 
 # Rename and save  ---------------------------------------
@@ -330,6 +354,9 @@ writeLines(paste("Hello! Welcome to the world of TQS Quality Control! ",
                  sep = ""), con)
 write.csv(final.table, con, row.names = FALSE)
 close(con)
+
+
+
 
 
 
