@@ -120,7 +120,7 @@ CheckSmpFragments <- function(areas.transformed) {
 # Import files - this import format will be changed when integrated with Shiny
 input_file <- "./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv"
 areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv", row.names = NULL, header = TRUE) #%>% select(-X)
-master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_MasterList_Summer2016.csv") %>% rename(Second.Trace = X2nd.trace)
+master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_TQS_GBT_MasterList.csv") %>% rename(Second.Trace = X2nd.trace)
 standard.types <- read.csv("./Targeted/TQS_QC/datafiles/GBT_filter.csv") %>%
   mutate(Replicate.Name = suppressWarnings(as.character(Replicate.Name))) %>%
   mutate(Std.Type       = suppressWarnings(as.character(Std.Type)))
@@ -154,10 +154,10 @@ IR.Table <- CheckStdFragments(areas.transformed) %>%
   mutate(Std.Ion.Ratio = ifelse(Quan.Trace == TRUE, (Area[Quan.Trace == TRUE]) / (Area[Second.Trace == TRUE]), NA)) %>%
   mutate(Diff.Mix = ifelse((standard.pattern %in% str_extract(Precursor.Ion.Name, standard.pattern)), TRUE, FALSE)) %>%
   group_by(Precursor.Ion.Name) %>%
-  #mutate(IR.min = ifelse(Diff.Mix == TRUE, suppressWarnings(min(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE)), suppressWarnings(min(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE)))) %>%
-  #mutate(IR.max = ifelse(Diff.Mix == TRUE, suppressWarnings(max(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE)), suppressWarnings(max(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE)))) %>%
-  mutate(IR.min = min(Std.Ion.Ratio, na.rm = TRUE)) %>%
-  mutate(IR.max = max(Std.Ion.Ratio, na.rm = TRUE)) %>%
+  mutate(IR.min = ifelse(Diff.Mix == TRUE, suppressWarnings(min(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE)), suppressWarnings(min(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE)))) %>%
+  mutate(IR.max = ifelse(Diff.Mix == TRUE, suppressWarnings(max(Std.Ion.Ratio[Std.Type == "GBTMix"], na.rm = TRUE)), suppressWarnings(max(Std.Ion.Ratio[Std.Type == "Mix1"], na.rm = TRUE)))) %>%
+  #mutate(IR.min = min(Std.Ion.Ratio, na.rm = TRUE)) %>%
+  #mutate(IR.max = max(Std.Ion.Ratio, na.rm = TRUE)) %>%
   select(Precursor.Ion.Name, IR.min, IR.max) %>%
   unique()
 
