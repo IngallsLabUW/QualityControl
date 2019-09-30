@@ -118,9 +118,10 @@ CheckSmpFragments <- function(areas.transformed) {
 }
 
 # Import files - this import format will be changed when integrated with Shiny
-input_file <- "./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv"
+input.file <- "./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv"
 areas.raw  <- read.csv("./Targeted/TQS_QC/datafiles/ReRuns_TQS_Transition_Results.csv", row.names = NULL, header = TRUE) #%>% select(-X)
 master     <- read.csv("./Targeted/TQS_QC/datafiles/HILIC_TQS_GBT_MasterList.csv") %>% rename(Second.Trace = X2nd.trace)
+
 standard.types <- read.csv("./Targeted/TQS_QC/datafiles/GBT_filter.csv") %>%
   mutate(Replicate.Name = suppressWarnings(as.character(Replicate.Name))) %>%
   mutate(Std.Type       = suppressWarnings(as.character(Std.Type)))
@@ -342,7 +343,7 @@ if (any(Blks.test == TRUE)) {
 # Add comments restating the given QC parameters. Save to 
 # current working directory with a new name, 
 # "TQSQC_<original file name>.csv
-con <- file(paste("TQSQC_", basename(input_file), sep = ""), open = "wt")
+con <- file(paste("TQSQC_", basename(input.file), sep = ""), open = "wt")
 writeLines(paste("Hello! Welcome to the world of TQS Quality Control! ",
                  "Minimum height for a real peak: ", min.height, ". ",
                  "Minimum area for a real peak: ", area.min, ". ",
